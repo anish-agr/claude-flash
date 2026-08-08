@@ -95,10 +95,15 @@ suppresses it whenever you're already looking at the terminal.
 {
   "hooks": {
     "Stop":         [{ "hooks": [{ "type": "command", "command": "\"...\\flash.exe\" done --bg" }] }],
-    "Notification": [{ "hooks": [{ "type": "command", "command": "\"...\\flash.exe\" ask --bg" }] }]
+    "Notification": [{ "matcher": "*",
+                       "hooks": [{ "type": "command", "command": "\"...\\flash.exe\" ask --bg" }] }]
   }
 }
 ```
+
+`Notification` matches on notification *type* — `permission_prompt`,
+`idle_prompt`, `agent_needs_input` and so on. The `"*"` matcher catches all of
+them; leave it out and the event never fires.
 
 `--bg` makes the process relaunch itself detached and return in a few
 milliseconds, so the hook never delays Claude Code.

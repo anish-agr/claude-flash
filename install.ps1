@@ -9,7 +9,8 @@
 param(
     [switch]$NoHooks,
     [switch]$NoShortcuts,
-    [switch]$NoRun
+    [switch]$NoRun,
+    [switch]$Diagnose
 )
 
 $ErrorActionPreference = 'Stop'
@@ -89,24 +90,37 @@ if (-not $NoHooks) {
         $settings | Add-Member -NotePropertyName hooks -NotePropertyValue ([pscustomobject]@{}) -Force
     }
 
-    function Set-FlashHook($hooks, [string]$Event, [string]$Command) {
+    function Set-FlashHook($hooks, [string]$Event, [string]$Command, [string]$Matcher) {
         # Keep any hooks the user already had; replace only our own.
         $kept = @()
         if ($hooks.PSObject.Properties.Name -contains $Event) {
             $kept = @($hooks.$Event) | Where-Object {
-                $_ -and (($_ | ConvertTo-Json -Depth 10 -Compress) -notmatch 'flash\.exe')
+                $_ -and (($_ | ConvertTo-Json -Depth 10 -Compress) -notmatch 'flash\.exe|ClaudeFlash')
             }
         }
         $entry = [pscustomobject]@{
             hooks = @([pscustomobject]@{ type = 'command'; command = $Command })
         }
+        # Notification matches on notification type (permission_prompt, idle_prompt,
+        # agent_needs_input, ...). Without an explicit matcher it never fires.
+        if ($Matcher) { $entry | Add-Member -NotePropertyName matcher -NotePropertyValue $Matcher }
+
         $value = @($entry) + $kept
         if ($hooks.PSObject.Properties.Name -contains $Event) { $hooks.$Event = $value }
         else { $hooks | Add-Member -NotePropertyName $Event -NotePropertyValue $value }
     }
 
     Set-FlashHook $settings.hooks 'Stop'         ('"{0}" done --bg' -f $exe)
-    Set-FlashHook $settings.hooks 'Notification' ('"{0}" ask --bg'  -f $exe)
+    Set-FlashHook $settings.hooks 'Notification' ('"{0}" ask --bg'  -f $exe) '*'
+
+    if ($Diagnose) {
+        # Records that the event fired at all, separately from whether the flash drew.
+        $settings.hooks.Notification[0].hooks += [pscustomobject]@{
+            type    = 'command'
+            command = 'cmd /c echo [%TIME%] ClaudeFlash notification fired >> "%LOCALAPPDATA%\ClaudeFlash\hook.log"'
+        }
+        Step "Diagnostic logging on -> %LOCALAPPDATA%\ClaudeFlash\hook.log"
+    }
 
     $json = $settings | ConvertTo-Json -Depth 32
     [System.IO.File]::WriteAllText($settingsPath, $json, (New-Object System.Text.UTF8Encoding($false)))
