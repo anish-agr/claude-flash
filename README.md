@@ -113,7 +113,7 @@ Every key below works with `flash set <key> <value>`, as a one-off flag
 |---|---|---|
 | `alpha` | `0.28` | Peak opacity, 0–1. Higher = harder to miss |
 | `alpha_ask` | `0.20` | Opacity for the blue flash |
-| `alpha_perm` | `0.22` | Opacity for the violet flash |
+| `alpha_perm` | `0.17` | Opacity for the violet flash |
 | `color_done` | `#00FF5A` | "Finished" colour |
 | `color_ask` | `#08A9FF` | "Has a question" colour |
 | `color_perm` | `#A855F7` | "Wants permission" colour |

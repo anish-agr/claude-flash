@@ -1,7 +1,8 @@
 // ClaudeFlash - a full-screen tinted flash that tells you Claude Code needs you.
 //
-// Green  = Claude finished responding   (Stop hook)
-// Amber  = Claude is waiting on you     (Notification hook)
+// Green  = Claude finished responding   (Stop)
+// Blue   = Claude has a question        (PreToolUse / AskUserQuestion)
+// Violet = Claude wants to run something (PreToolUse / tool names, opt-in)
 //
 // The overlay is a click-through layered window: it never steals focus and never
 // swallows a click. Any mouse button or key press dismisses it instantly.
@@ -32,8 +33,10 @@ namespace ClaudeFlash
             "ClaudeFlash\r\n\r\n" +
             "  flash                 green flash (Claude is done)\r\n" +
             "  flash done            green flash\r\n" +
-            "  flash ask             amber flash (Claude needs an answer)\r\n" +
-            "  flash <color>         green | amber | red | blue | purple | cyan | white | #RRGGBB\r\n\r\n" +
+            "  flash ask             blue flash (Claude has a question)\r\n" +
+            "  flash perm            violet flash (Claude wants to run something)\r\n" +
+            "  flash <color>         green | blue | violet | amber | red | lavender | indigo\r\n" +
+            "                        | teal | pink | purple | cyan | white | #RRGGBB\r\n\r\n" +
             "  flash set <key> <val> change a setting, e.g. flash set color_ask #08A9FF\r\n" +
             "  flash config          open config.ini\r\n" +
             "  flash reset           restore default settings\r\n\r\n" +
@@ -544,7 +547,7 @@ namespace ClaudeFlash
         public Color ColorDone = ColorTranslator.FromHtml("#00FF5A");
         public Color ColorAsk = ColorTranslator.FromHtml("#08A9FF");
         public Color ColorPerm = ColorTranslator.FromHtml("#A855F7");
-        public double AlphaPerm = 0.22;
+        public double AlphaPerm = 0.17;
         public string SkipIfFocused = "";
 
         private const string Template =
@@ -579,7 +582,7 @@ namespace ClaudeFlash
             "\r\n" +
             "# Shown when Claude asks permission to run something.\r\n" +
             "color_perm=#A855F7\r\n" +
-            "alpha_perm=0.22\r\n" +
+            "alpha_perm=0.17\r\n" +
             "\r\n" +
             "# Comma-separated process names. If one of them owns the focused window when\r\n" +
             "# the flash fires, it is skipped - you were already looking at it.\r\n" +
