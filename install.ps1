@@ -110,17 +110,43 @@ if (-not $NoHooks) {
         else { $hooks | Add-Member -NotePropertyName $Event -NotePropertyValue $value }
     }
 
-    Set-FlashHook $settings.hooks 'Stop'         ('"{0}" done --bg' -f $exe)
-    Set-FlashHook $settings.hooks 'Notification' ('"{0}" ask --bg'  -f $exe) '*'
+    Set-FlashHook $settings.hooks 'Stop' ('"{0}" done --bg' -f $exe)
 
+    # One entry per notification type rather than a single wildcard. A bare "*" and an
+    # absent matcher both failed to fire; an exact type matches whether the matcher is
+    # compared literally or as a regex.
+    $needsYou = 'permission_prompt', 'idle_prompt', 'elicitation_dialog', 'agent_needs_input'
+    $entries = @()
+    foreach ($type in $needsYou) {
+        $commands = @([pscustomobject]@{ type = 'command'; command = ('"{0}" ask --bg' -f $exe) })
+        if ($Diagnose) {
+            $commands += [pscustomobject]@{
+                type    = 'command'
+                command = ('cmd /c echo [%TIME%] {0} >> "%LOCALAPPDATA%\ClaudeFlash\hook.log"' -f $type)
+            }
+        }
+        $entries += [pscustomobject]@{ matcher = $type; hooks = $commands }
+    }
     if ($Diagnose) {
-        # Records that the event fired at all, separately from whether the flash drew.
-        $settings.hooks.Notification[0].hooks += [pscustomobject]@{
-            type    = 'command'
-            command = 'cmd /c echo [%TIME%] ClaudeFlash notification fired >> "%LOCALAPPDATA%\ClaudeFlash\hook.log"'
+        # Catch-all logger: tells us if ANY notification fires under a type we did not list.
+        $entries += [pscustomobject]@{
+            hooks = @([pscustomobject]@{
+                type    = 'command'
+                command = 'cmd /c echo [%TIME%] (no matcher) >> "%LOCALAPPDATA%\ClaudeFlash\hook.log"'
+            })
         }
         Step "Diagnostic logging on -> %LOCALAPPDATA%\ClaudeFlash\hook.log"
     }
+
+    $keptNotif = @()
+    if ($settings.hooks.PSObject.Properties.Name -contains 'Notification') {
+        $keptNotif = @($settings.hooks.Notification) | Where-Object {
+            $_ -and (($_ | ConvertTo-Json -Depth 10 -Compress) -notmatch 'flash\.exe|ClaudeFlash')
+        }
+    }
+    $value = $entries + $keptNotif
+    if ($settings.hooks.PSObject.Properties.Name -contains 'Notification') { $settings.hooks.Notification = $value }
+    else { $settings.hooks | Add-Member -NotePropertyName Notification -NotePropertyValue $value }
 
     $json = $settings | ConvertTo-Json -Depth 32
     [System.IO.File]::WriteAllText($settingsPath, $json, (New-Object System.Text.UTF8Encoding($false)))
