@@ -8,7 +8,7 @@ when to come back.
 |---|---|---|
 | **Green** `#00FF5A` | Claude finished responding | `Stop` |
 | **Blue** `#08A9FF` | Claude has a question for you | `PreToolUse` / `AskUserQuestion` |
-| **Violet** `#A855F7` | Claude wants to run something | `PreToolUse` / tool names — opt-in |
+| **Violet** `#A855F7` | Claude wants to run something | `Notification` / `permission_prompt` — opt-in, see below |
 
 The overlay is click-through and never takes focus, so it can't eat a keystroke
 or a click. Any mouse button or key makes it vanish immediately.
@@ -21,8 +21,9 @@ Double-click **`setup.cmd`**, or:
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-Add `-PermissionFlash` for the violet signal (see [Permission
-flashes](#permission-flashes) — it's off by default for a reason):
+Only add `-PermissionFlash` if you approve tools by hand. In auto-approve or
+bypass mode it flashes for calls you were never asked about — see [Permission
+flashes](#permission-flashes-and-why-theyre-off-by-default):
 
 ```bash
 powershell -ExecutionPolicy Bypass -File install.ps1 -PermissionFlash
@@ -182,21 +183,28 @@ are already there:
 `--bg` makes the process relaunch itself detached and return in a few
 milliseconds, so the hook never delays Claude Code.
 
-### Permission flashes
+### Permission flashes, and why they're off by default
 
 There is no reliable "permission requested" event. `Notification` is supposed to
 provide one, but on the Windows desktop app it never fired in testing — not
 `permission_prompt`, not `idle_prompt`, not `elicitation_dialog`, and not with a
-`"*"` matcher or no matcher at all. `Notification` entries are still installed
-because they cost nothing and may work elsewhere, but don't count on them.
+`"*"` matcher or no matcher at all. Those entries are still installed because
+they cost nothing and are correct if the event ever does fire: they only trigger
+on a real prompt.
 
-So `-PermissionFlash` approximates it with `PreToolUse` on common tool names,
-which fires *before a tool runs*. In manual approval mode that's exactly when
-you get prompted. With tools pre-approved it fires anyway, without a prompt — so
-it's noisy in auto-approve mode. That's the tradeoff, and why it's opt-in.
-`AskUserQuestion` is excluded from the match so it keeps its own blue.
+`-PermissionFlash` is the fallback, and it is a genuine approximation, not an
+equivalent. It hangs off `PreToolUse` on common tool names, which fires **before
+a tool runs — whether or not you are asked anything**. Nothing in the hook
+payload distinguishes "about to prompt" from "already approved".
 
-To turn it off, re-run `install.ps1` without the flag.
+So:
+
+- **Manual approval mode** — the two coincide, and it behaves correctly.
+- **Auto-approve or bypass mode** — it flashes constantly for calls you were
+  never asked about. Don't enable it.
+
+Leave it off unless you approve tools by hand. Without it, every flash this tool
+produces corresponds to something that genuinely needs you.
 
 ### Two gotchas worth knowing
 
@@ -213,10 +221,36 @@ noticeable without hiding your work. It's `WS_EX_TRANSPARENT` (clicks pass
 straight through), `WS_EX_NOACTIVATE` (never takes focus) and `WS_EX_TOOLWINDOW`
 (stays out of alt-tab).
 
-Because clicks pass through, the overlay never sees input. Two low-level hooks
-answer the single question "did anything happen" and dismiss it — no key code is
-ever read or recorded, and every event is passed straight on to whatever was
-going to receive it. The hooks live only for the ~1 second the flash is up.
+Because clicks pass through, the overlay never sees input, so dismissing it means
+detecting input some other way.
+
+**It does not install a keyboard hook.** `SetWindowsHookEx(WH_KEYBOARD_LL)` is
+the obvious way to do this and it is the wrong one: a global keyboard hook is the
+defining behaviour of a keylogger, antivirus treats it as such, and an unsigned
+binary that installs one is asking to be quarantined. Those API names do not
+appear in the compiled binary at all.
+
+Instead it polls `GetAsyncKeyState` on the animation timer — no hook, nothing
+installed, nothing intercepted, and it can only observe during the ~1 second the
+flash is on screen. The loop stops at the first key that changed state and never
+keeps which one it was.
+
+### If Windows warns about it
+
+`flash.exe` is unsigned and every rebuild produces a new hash with no reputation,
+so Defender may run a cloud check or SmartScreen may show an
+"unrecognised app" prompt the first time a freshly built copy runs. That is a
+reputation warning, not a detection.
+
+You can confirm nothing was actually flagged:
+
+```powershell
+Get-MpThreatDetection | Select-Object InitialDetectionTime, ThreatID, Resources
+```
+
+Building it yourself from source — which is the only way this ships — means you
+can read exactly what it does first. Signing the binary with a code-signing
+certificate is the only real fix for the warning, and that costs money.
 
 ### Adding more triggers
 

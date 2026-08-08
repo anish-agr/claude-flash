@@ -673,10 +673,7 @@ namespace ClaudeFlash
         private double _dismissStartAlpha;
         private bool _finished;
 
-        private IntPtr _keyboardHook = IntPtr.Zero;
-        private IntPtr _mouseHook = IntPtr.Zero;
-        private Native.HookProc _keyboardProc;   // fields, not locals: the GC must not
-        private Native.HookProc _mouseProc;      // collect these while Windows holds them
+        private bool _inputPrimed;
 
         public FlashContext(Color color, Settings settings)
         {
@@ -692,7 +689,7 @@ namespace ClaudeFlash
                 _overlays.Add(overlay);
             }
 
-            InstallInputHooks();
+            PrimeInput();
 
             _timer = new System.Windows.Forms.Timer();
             _timer.Interval = 15;
@@ -706,6 +703,8 @@ namespace ClaudeFlash
         {
             double t = _clock.Elapsed.TotalMilliseconds;
             if (t > _s.MaxMs) { Finish(); return; }
+
+            if (t >= _s.MinVisibleMs && AnyInputSinceLastCheck()) Dismiss();
 
             double a;
             if (_dismissing)
@@ -756,7 +755,6 @@ namespace ClaudeFlash
             if (_finished) return;
             _finished = true;
             _timer.Stop();
-            RemoveInputHooks();
             foreach (Overlay o in _overlays) o.Dispose();
             _overlays.Clear();
             ExitThread();
@@ -771,47 +769,33 @@ namespace ClaudeFlash
 
         // ---- dismiss-on-any-input ---------------------------------------------
         //
-        // The overlay is click-through, so input never reaches it. Low-level hooks
-        // just answer "did anything happen"; key codes are never read or stored, and
-        // every event is passed straight on to whatever was going to receive it.
+        // The overlay is click-through, so input never reaches it and we have to look
+        // for it some other way.
+        //
+        // This deliberately does NOT use SetWindowsHookEx(WH_KEYBOARD_LL). A global
+        // keyboard hook is the defining behaviour of a keylogger, and antivirus treats
+        // it that way - an unsigned binary that installs one is asking to be
+        // quarantined on someone else's machine. Polling GetAsyncKeyState needs no
+        // hook, installs nothing, and cannot see input outside the ~1 second the flash
+        // is on screen.
+        //
+        // The low bit of GetAsyncKeyState means "pressed since the last call", so one
+        // priming sweep at startup stops a key that was already held from dismissing
+        // the flash before it is even visible. Nothing is recorded: the loop stops at
+        // the first key that changed and never keeps which one it was.
 
-        private void InstallInputHooks()
+        private void PrimeInput()
         {
-            _keyboardProc = KeyboardHook;
-            _mouseProc = MouseHook;
-            IntPtr module = Native.GetModuleHandle(null);
-            try { _keyboardHook = Native.SetWindowsHookEx(Native.WH_KEYBOARD_LL, _keyboardProc, module, 0); }
-            catch { }
-            try { _mouseHook = Native.SetWindowsHookEx(Native.WH_MOUSE_LL, _mouseProc, module, 0); }
-            catch { }
+            for (int vk = 1; vk < 256; vk++) Native.GetAsyncKeyState(vk);
+            _inputPrimed = true;
         }
 
-        private void RemoveInputHooks()
+        private bool AnyInputSinceLastCheck()
         {
-            if (_keyboardHook != IntPtr.Zero) { Native.UnhookWindowsHookEx(_keyboardHook); _keyboardHook = IntPtr.Zero; }
-            if (_mouseHook != IntPtr.Zero) { Native.UnhookWindowsHookEx(_mouseHook); _mouseHook = IntPtr.Zero; }
-        }
-
-        private IntPtr KeyboardHook(int nCode, IntPtr wParam, IntPtr lParam)
-        {
-            if (nCode >= 0)
-            {
-                int msg = wParam.ToInt32();
-                if (msg == Native.WM_KEYDOWN || msg == Native.WM_SYSKEYDOWN) Dismiss();
-            }
-            return Native.CallNextHookEx(_keyboardHook, nCode, wParam, lParam);
-        }
-
-        private IntPtr MouseHook(int nCode, IntPtr wParam, IntPtr lParam)
-        {
-            if (nCode >= 0)
-            {
-                int msg = wParam.ToInt32();
-                if (msg == Native.WM_LBUTTONDOWN || msg == Native.WM_RBUTTONDOWN ||
-                    msg == Native.WM_MBUTTONDOWN || msg == Native.WM_XBUTTONDOWN ||
-                    msg == Native.WM_MOUSEWHEEL) Dismiss();
-            }
-            return Native.CallNextHookEx(_mouseHook, nCode, wParam, lParam);
+            if (!_inputPrimed) { PrimeInput(); return false; }
+            for (int vk = 1; vk < 256; vk++)
+                if ((Native.GetAsyncKeyState(vk) & 0x0001) != 0) return true;
+            return false;
         }
 
         // ---- the tint ----------------------------------------------------------
@@ -870,7 +854,6 @@ namespace ClaudeFlash
         {
             if (disposing)
             {
-                RemoveInputHooks();
                 if (_timer != null) _timer.Dispose();
                 foreach (Overlay o in _overlays) o.Dispose();
                 _overlays.Clear();
@@ -986,16 +969,6 @@ namespace ClaudeFlash
         public const byte AC_SRC_OVER = 0x00;
         public const byte AC_SRC_ALPHA = 0x01;
 
-        public const int WH_KEYBOARD_LL = 13;
-        public const int WH_MOUSE_LL = 14;
-        public const int WM_KEYDOWN = 0x0100;
-        public const int WM_SYSKEYDOWN = 0x0104;
-        public const int WM_LBUTTONDOWN = 0x0201;
-        public const int WM_RBUTTONDOWN = 0x0204;
-        public const int WM_MBUTTONDOWN = 0x0207;
-        public const int WM_XBUTTONDOWN = 0x020B;
-        public const int WM_MOUSEWHEEL = 0x020A;
-
         public static readonly IntPtr DpiPerMonitorAwareV2 = new IntPtr(-4);
 
         [StructLayout(LayoutKind.Sequential)]
@@ -1021,8 +994,6 @@ namespace ClaudeFlash
             public byte AlphaFormat;
         }
 
-        public delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
-
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref POINT pptDst, ref SIZE psize,
             IntPtr hdcSrc, ref POINT pptSrc, int crKey, ref BLENDFUNCTION pblend, int dwFlags);
@@ -1039,24 +1010,16 @@ namespace ClaudeFlash
         [DllImport("user32.dll")]
         public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
-        [DllImport("user32.dll", SetLastError = true)]
-        public static extern IntPtr SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, uint threadId);
-
+        // Reads whether a key or mouse button changed state. Unlike a hook this
+        // receives nothing, intercepts nothing, and is what games use for input.
         [DllImport("user32.dll")]
-        public static extern bool UnhookWindowsHookEx(IntPtr hhk);
-
-        [DllImport("user32.dll")]
-        public static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+        public static extern short GetAsyncKeyState(int vKey);
 
         [DllImport("user32.dll")]
         public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
 
         [DllImport("user32.dll")]
         public static extern bool SetProcessDPIAware();
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
-        public static extern IntPtr GetModuleHandle(string moduleName);
-
         [DllImport("gdi32.dll")]
         public static extern IntPtr CreateCompatibleDC(IntPtr hdc);
 
