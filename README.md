@@ -18,12 +18,22 @@ Double-click **`setup.cmd`**, or:
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-That builds `bin\flash.exe`, registers it for `Win+R`, drops two desktop
-shortcuts, and adds the Claude Code hooks. **Restart Claude Code afterwards** so
-it picks up the hooks.
+That builds `bin\flash.exe`, copies it to
+`%LOCALAPPDATA%\Microsoft\WindowsApps\flash.exe`, drops two desktop shortcuts,
+and adds the Claude Code hooks. **Restart Claude Code afterwards** so it picks up
+the hooks.
 
 Nothing to install first — it compiles with the C# compiler that already ships
 with Windows.
+
+`WindowsApps` is on the user PATH by default on Windows 10/11, so `flash` works
+as a bare command from `Win+R`, `cmd` and PowerShell straight away — including
+terminals that are already open, which editing PATH could not do. Hooks,
+shortcuts and the `Win+R` registration all point at that one copy, so there's
+never a stale second binary.
+
+If you edit the source, re-run `install.ps1` — that's what refreshes the
+installed copy.
 
 ## Using it
 

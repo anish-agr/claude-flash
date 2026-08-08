@@ -14,8 +14,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$exe = Join-Path $root 'bin\flash.exe'
-$binDir = Join-Path $root 'bin'
+$built = Join-Path $root 'bin\flash.exe'
+
+# Canonical install location. %LOCALAPPDATA%\Microsoft\WindowsApps is on the user
+# PATH out of the box on Windows 10/11, so putting the binary here makes `flash`
+# resolve from Win+R, cmd, and PowerShell - including shells that are already
+# open, which a PATH edit could never do. Everything below points at this one
+# copy, so there is never a stale second binary to get confused about.
+$installDir = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'
+$exe = Join-Path $installDir 'flash.exe'
 
 function Step($text) { Write-Host "  $text" -ForegroundColor Gray }
 function Ok($text) { Write-Host "  $text" -ForegroundColor Green }
@@ -25,16 +32,23 @@ Write-Host ("-" * 50) -ForegroundColor DarkGray
 
 # ---- 1. build ---------------------------------------------------------------
 & (Join-Path $root 'build.ps1') | Out-Null
-if (-not (Test-Path $exe)) { throw "Build did not produce $exe" }
+if (-not (Test-Path $built)) { throw "Build did not produce $built" }
 Ok "Built bin\flash.exe"
 
-# ---- 2. Win+R ---------------------------------------------------------------
-# App Paths beats editing PATH: it takes effect instantly and Explorer needs no restart.
+# ---- 2. install so the name resolves everywhere -----------------------------
+Get-Process -Name flash -ErrorAction SilentlyContinue | ForEach-Object {
+    try { $_.Kill(); $_.WaitForExit(2000) } catch { }   # a running flash would lock the file
+}
+New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+Copy-Item $built $exe -Force
+Ok "Installed to $exe"
+
+# Belt and braces: App Paths makes Win+R work even if PATH is ever mangled.
 $appPaths = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\flash.exe'
 New-Item -Path $appPaths -Force | Out-Null
 Set-ItemProperty -Path $appPaths -Name '(Default)' -Value $exe
-Set-ItemProperty -Path $appPaths -Name 'Path' -Value $binDir
-Ok "Win+R -> 'flash' registered"
+Set-ItemProperty -Path $appPaths -Name 'Path' -Value $installDir
+Ok "'flash' available in Win+R, cmd and PowerShell"
 
 # ---- 3. desktop shortcuts ---------------------------------------------------
 if (-not $NoShortcuts) {
@@ -48,7 +62,7 @@ if (-not $NoShortcuts) {
         $lnk = $shell.CreateShortcut((Join-Path $desktop $s.Name))
         $lnk.TargetPath = $exe
         $lnk.Arguments = $s.Args
-        $lnk.WorkingDirectory = $binDir
+        $lnk.WorkingDirectory = $installDir
         $lnk.IconLocation = "$exe,0"
         $lnk.Description = $s.Desc
         $lnk.Save()
@@ -99,6 +113,12 @@ if (-not $NoHooks) {
     Ok "Hooks installed in $settingsPath"
     Step "Stop -> green,  Notification -> amber"
 }
+
+# ---- verify -----------------------------------------------------------------
+# Resolve the bare name the way a fresh shell would, rather than assuming it works.
+$resolved = cmd.exe /c "where flash 2>nul"
+if ($LASTEXITCODE -eq 0 -and $resolved) { Ok "Verified: 'flash' resolves to $($resolved | Select-Object -First 1)" }
+else { Write-Host "  WARNING: 'flash' did not resolve on PATH" -ForegroundColor Yellow }
 
 # ---- done -------------------------------------------------------------------
 Write-Host ("-" * 50) -ForegroundColor DarkGray

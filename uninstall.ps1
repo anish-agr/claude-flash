@@ -32,6 +32,13 @@ if (Test-Path $settingsPath) {
     Ok "Hooks removed from settings.json"
 }
 
+# ---- the installed binary ---------------------------------------------------
+Get-Process -Name flash -ErrorAction SilentlyContinue | ForEach-Object {
+    try { $_.Kill(); $_.WaitForExit(2000) } catch { }
+}
+$installed = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\flash.exe'
+if (Test-Path $installed) { Remove-Item $installed -Force; Ok "Removed $installed" }
+
 # ---- Win+R ------------------------------------------------------------------
 $appPaths = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\flash.exe'
 if (Test-Path $appPaths) {
