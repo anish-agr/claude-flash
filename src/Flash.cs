@@ -34,6 +34,9 @@ namespace ClaudeFlash
             "  flash done            green flash\r\n" +
             "  flash ask             amber flash (Claude needs an answer)\r\n" +
             "  flash <color>         green | amber | red | blue | purple | cyan | white | #RRGGBB\r\n\r\n" +
+            "  flash set <key> <val> change a setting, e.g. flash set color_ask #08A9FF\r\n" +
+            "  flash config          open config.ini\r\n" +
+            "  flash reset           restore default settings\r\n\r\n" +
             "  flash on              enable flashing\r\n" +
             "  flash off             disable flashing (hooks stay installed, they just do nothing)\r\n" +
             "  flash toggle          flip enabled/disabled - green confirm = on, red confirm = off\r\n" +
@@ -77,6 +80,7 @@ namespace ClaudeFlash
             string mode = "done";
             bool background = false;
             var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var positional = new List<string>();
 
             foreach (string raw in argv)
             {
@@ -96,14 +100,16 @@ namespace ClaudeFlash
                 }
                 else
                 {
-                    mode = arg;
+                    positional.Add(arg);
                 }
             }
+            if (positional.Count > 0) mode = positional[0];
 
             string command = mode.ToLowerInvariant();
             if (command == "help" || command == "?" || command == "status" ||
-                command == "on" || command == "off" || command == "toggle")
-                return HandleCommand(command, overrides);
+                command == "on" || command == "off" || command == "toggle" ||
+                command == "set" || command == "config" || command == "reset")
+                return HandleCommand(command, overrides, positional);
 
             if (!IsEnabled()) return 0;
 
@@ -117,13 +123,28 @@ namespace ClaudeFlash
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static int HandleCommand(string command, Dictionary<string, string> overrides)
+        private static int HandleCommand(string command, Dictionary<string, string> overrides, List<string> positional)
         {
             EnableDpiAwareness();
             Settings settings = Settings.Load(overrides);
 
             switch (command)
             {
+                case "set":
+                    return SetConfig(positional);
+
+                case "config":
+                    try { Process.Start(Settings.ConfigPath()); }
+                    catch { MessageBox.Show(Settings.ConfigPath(), "ClaudeFlash config"); }
+                    return 0;
+
+                case "reset":
+                    try { File.Delete(Settings.ConfigPath()); }
+                    catch { }
+                    Settings.Load(null);   // writes a fresh file with the defaults
+                    Run(ParseColor("green", Color.Green), Settings.Load(null));
+                    return 0;
+
                 case "help":
                 case "?":
                     MessageBox.Show(Usage, "ClaudeFlash", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -178,6 +199,102 @@ namespace ClaudeFlash
             else color = ParseColor(mode, settings.ColorDone);
 
             Run(color, settings);
+            return 0;
+        }
+
+        private static readonly string[] KnownKeys = {
+            "alpha", "alpha_ask", "alpha_perm", "fade_in_ms", "hold_ms", "fade_out_ms",
+            "dismiss_fade_ms", "min_visible_ms", "vignette",
+            "color_done", "color_ask", "color_perm", "skip_if_focused"
+        };
+
+        /// <summary>
+        /// `flash set color_ask #08A9FF` - rewrites one line of config.ini, leaving the
+        /// comments around it intact.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int SetConfig(List<string> positional)
+        {
+            // positional[0] is "set" itself.
+            string key = positional.Count > 1 ? positional[1].Trim().TrimStart('-') : "";
+            string val = positional.Count > 2 ? positional[2].Trim() : "";
+
+            int eq = key.IndexOf('=');          // also accept `flash set color_ask=#08A9FF`
+            if (eq > 0 && val.Length == 0) { val = key.Substring(eq + 1); key = key.Substring(0, eq); }
+
+            if (key.Length == 0 || val.Length == 0)
+            {
+                MessageBox.Show(
+                    "Usage:  flash set <key> <value>\r\n\r\nKeys:\r\n  " + string.Join("\r\n  ", KnownKeys) +
+                    "\r\n\r\nExamples:\r\n  flash set color_ask #08A9FF\r\n  flash set alpha 0.35" +
+                    "\r\n  flash set hold_ms 700",
+                    "ClaudeFlash", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return 1;
+            }
+
+            bool known = false;
+            foreach (string k in KnownKeys)
+                if (string.Equals(k, key, StringComparison.OrdinalIgnoreCase)) { key = k; known = true; break; }
+            if (!known)
+            {
+                MessageBox.Show("Unknown setting: " + key + "\r\n\r\nKnown keys:\r\n  " +
+                    string.Join("\r\n  ", KnownKeys), "ClaudeFlash", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return 1;
+            }
+
+            // Reject values that would silently fall back to a default later.
+            if (key.StartsWith("color_", StringComparison.Ordinal))
+            {
+                Color probe = ParseColor(val, Color.Empty);
+                if (probe == Color.Empty)
+                {
+                    MessageBox.Show("Not a colour: " + val + "\r\n\r\nUse a name (green, blue, violet, ...) or #RRGGBB.",
+                        "ClaudeFlash", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return 1;
+                }
+            }
+            else if (!key.Equals("skip_if_focused", StringComparison.Ordinal))
+            {
+                double n;
+                if (!double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out n))
+                {
+                    MessageBox.Show("Not a number: " + val, "ClaudeFlash", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return 1;
+                }
+            }
+
+            try
+            {
+                string path = Settings.ConfigPath();
+                Settings.Load(null);                       // make sure the file exists
+                var lines = new List<string>(File.ReadAllLines(path));
+                bool replaced = false;
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    string t = lines[i].TrimStart();
+                    if (t.StartsWith("#", StringComparison.Ordinal) || t.StartsWith(";", StringComparison.Ordinal)) continue;
+                    int e = t.IndexOf('=');
+                    if (e <= 0) continue;
+                    if (string.Equals(t.Substring(0, e).Trim(), key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        lines[i] = key + "=" + val;
+                        replaced = true;
+                        break;
+                    }
+                }
+                if (!replaced) lines.Add(key + "=" + val);
+                File.WriteAllLines(path, lines.ToArray());
+            }
+            catch (Exception ex) { LogError(ex); return 1; }
+
+            // Confirm in the colour that was just set, so you see the change immediately.
+            Settings updated = Settings.Load(null);
+            Color show = updated.ColorDone;
+            if (key == "color_ask") { show = updated.ColorAsk; updated.Alpha = updated.AlphaAsk; }
+            else if (key == "color_perm") { show = updated.ColorPerm; updated.Alpha = updated.AlphaPerm; }
+            else if (key == "alpha_ask") updated.Alpha = updated.AlphaAsk;
+            else if (key == "alpha_perm") updated.Alpha = updated.AlphaPerm;
+            Run(show, updated);
             return 0;
         }
 

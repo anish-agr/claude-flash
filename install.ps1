@@ -10,7 +10,8 @@ param(
     [switch]$NoHooks,
     [switch]$NoShortcuts,
     [switch]$NoRun,
-    [switch]$Diagnose
+    [switch]$Diagnose,
+    [switch]$PermissionFlash
 )
 
 $ErrorActionPreference = 'Stop'
@@ -169,6 +170,16 @@ if (-not $NoHooks) {
     # rides on the tool call Claude makes when it asks you something. This is the
     # trigger that actually works.
     Set-FlashHook $settings.hooks 'PreToolUse' ('"{0}" ask --bg' -f $exe) 'AskUserQuestion'
+
+    if ($PermissionFlash) {
+        # Notification/permission_prompt never fires here, so the closest available
+        # signal is "a tool is about to run". In manual approval mode that is exactly
+        # when you get prompted; with tools pre-approved it fires without a prompt too.
+        # AskUserQuestion is deliberately excluded so it keeps its own colour.
+        $tools = 'Bash|PowerShell|Write|Edit|NotebookEdit|WebFetch|WebSearch|Task|Agent'
+        Set-FlashHook $settings.hooks 'PreToolUse' ('"{0}" perm --bg' -f $exe) $tools
+        Step "Permission flash on -> violet before a tool runs"
+    }
 
     if ($Diagnose) {
         # Log every event we can name, so one restart reveals which ones fire.
