@@ -1,11 +1,11 @@
 # ClaudeFlash
 
 Washes your whole screen green for about a second when Claude Code finishes a
-response, and amber when it's waiting on an answer from you. Look away, get on
-with something else, and let peripheral vision tell you when to come back.
+response, and blue when it has a question for you. Look away, get on with
+something else, and let peripheral vision tell you when to come back.
 
 - **Green** — Claude finished responding.
-- **Amber** — Claude has a question or needs permission.
+- **Blue** — Claude has a question for you.
 
 The overlay is click-through and never takes focus, so it can't eat a keystroke
 or a click. Any mouse button or key makes it vanish immediately.
@@ -50,8 +50,9 @@ Full command list:
 ```
 flash                 green flash
 flash done            green flash
-flash ask             amber flash
-flash <color>         green | amber | red | blue | purple | cyan | white | #RRGGBB
+flash ask             blue flash
+flash <color>         green | amber | red | blue | violet | lavender | indigo
+                      | teal | pink | purple | cyan | white | #RRGGBB
 flash on | off | toggle | status | help
 ```
 
@@ -68,6 +69,9 @@ the next flash picks it up.
 
 ```ini
 alpha=0.28           # peak opacity, 0..1. higher = harder to miss
+alpha_ask=0.20       # the ask colour gets its own, gentler opacity. blue only reads
+                     # as blue while it stays saturated, and lightening it to soften
+                     # it just turns the wash white — so soften with opacity instead
 fade_in_ms=70
 hold_ms=420
 fade_out_ms=560
@@ -77,7 +81,7 @@ min_visible_ms=120   # ignore input this early, so a keystroke already in flight
 vignette=0.32        # 0 = flat tint. higher = clearer in the middle, so you can
                      # still read what's underneath
 color_done=#00FF5A
-color_ask=#FFAA00
+color_ask=#08A9FF
 skip_if_focused=     # comma-separated process names; skip the flash when one of
                      # them is already the focused window
 ```
@@ -89,21 +93,37 @@ suppresses it whenever you're already looking at the terminal.
 
 ## How it works
 
-`install.ps1` adds two hooks to `~/.claude/settings.json`:
+`install.ps1` writes these hooks into `~/.claude/settings.json`:
 
 ```json
 {
   "hooks": {
-    "Stop":         [{ "hooks": [{ "type": "command", "command": "\"...\\flash.exe\" done --bg" }] }],
-    "Notification": [{ "matcher": "*",
-                       "hooks": [{ "type": "command", "command": "\"...\\flash.exe\" ask --bg" }] }]
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "\"...\\flash.exe\" done --bg" }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "AskUserQuestion",
+        "hooks": [{ "type": "command", "command": "\"...\\flash.exe\" ask --bg" }] }
+    ]
   }
 }
 ```
 
-`Notification` matches on notification *type* — `permission_prompt`,
-`idle_prompt`, `agent_needs_input` and so on. The `"*"` matcher catches all of
-them; leave it out and the event never fires.
+Green comes from `Stop`. Blue comes from `PreToolUse` matching
+`AskUserQuestion` — the tool call Claude makes when it asks you something.
+
+`Notification` entries are installed too, matched per type (`permission_prompt`,
+`idle_prompt`, `elicitation_dialog`, `agent_needs_input`). On the Windows desktop
+app these never fired in testing — not with a `"*"` matcher, not with exact
+types, not with no matcher at all — so don't rely on them. They're kept because
+they cost nothing and do fire in other setups.
+
+Two things worth knowing if you extend this:
+
+- On events that support a matcher, an entry **without** one never fires. `Stop`
+  takes no matcher and works fine; `PreToolUse` and `Notification` need one.
+- Hooks are read when the session starts. Editing `settings.json` mid-session
+  changes nothing until you restart Claude Code.
 
 `--bg` makes the process relaunch itself detached and return in a few
 milliseconds, so the hook never delays Claude Code.
@@ -123,7 +143,7 @@ going to receive it. The hooks live only for the ~1 second the flash is up.
 ### Adding more triggers
 
 Any Claude Code hook event works. To flash when a subagent finishes, add a
-`SubagentStop` entry pointing at `"...\flash.exe" blue --bg`.
+`SubagentStop` entry pointing at `"...\flash.exe" violet --bg`.
 
 ## Notes
 

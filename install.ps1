@@ -90,6 +90,16 @@ if (-not $NoHooks) {
         $settings | Add-Member -NotePropertyName hooks -NotePropertyValue ([pscustomobject]@{}) -Force
     }
 
+    # Drop any diagnostic loggers left behind by a previous -Diagnose run, including
+    # ones on events this script does not otherwise manage.
+    foreach ($ev in @($settings.hooks.PSObject.Properties.Name)) {
+        $survivors = @($settings.hooks.$ev) | Where-Object {
+            $_ -and (($_ | ConvertTo-Json -Depth 10 -Compress) -notmatch 'ClaudeFlash\\\\hook\.log')
+        }
+        if ($survivors.Count -eq 0) { $settings.hooks.PSObject.Properties.Remove($ev) }
+        else { $settings.hooks.$ev = $survivors }
+    }
+
     function Set-FlashHook($hooks, [string]$Event, [string]$Command, [string]$Matcher) {
         # Keep any hooks the user already had; replace only our own.
         $kept = @()
@@ -148,10 +158,32 @@ if (-not $NoHooks) {
     if ($settings.hooks.PSObject.Properties.Name -contains 'Notification') { $settings.hooks.Notification = $value }
     else { $settings.hooks | Add-Member -NotePropertyName Notification -NotePropertyValue $value }
 
+    # Notification turned out not to fire at all in the desktop app, so amber also
+    # rides on the tool call Claude makes when it asks you something. This is the
+    # trigger that actually works.
+    Set-FlashHook $settings.hooks 'PreToolUse' ('"{0}" ask --bg' -f $exe) 'AskUserQuestion'
+
+    if ($Diagnose) {
+        # Log every event we can name, so one restart reveals which ones fire.
+        foreach ($ev in 'PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop', 'SubagentStop', 'SessionStart') {
+            $logger = [pscustomobject]@{
+                hooks = @([pscustomobject]@{
+                    type    = 'command'
+                    command = ('cmd /c echo [%TIME%] {0} >> "%LOCALAPPDATA%\ClaudeFlash\hook.log"' -f $ev)
+                })
+            }
+            if ($settings.hooks.PSObject.Properties.Name -contains $ev) {
+                $settings.hooks.$ev = @($settings.hooks.$ev) + $logger
+            } else {
+                $settings.hooks | Add-Member -NotePropertyName $ev -NotePropertyValue @($logger)
+            }
+        }
+    }
+
     $json = $settings | ConvertTo-Json -Depth 32
     [System.IO.File]::WriteAllText($settingsPath, $json, (New-Object System.Text.UTF8Encoding($false)))
     Ok "Hooks installed in $settingsPath"
-    Step "Stop -> green,  Notification -> amber"
+    Step "Stop -> green,  AskUserQuestion -> blue"
 }
 
 # ---- verify -----------------------------------------------------------------

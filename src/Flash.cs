@@ -163,7 +163,12 @@ namespace ClaudeFlash
             if (mode.Equals("done", StringComparison.OrdinalIgnoreCase)) color = settings.ColorDone;
             else if (mode.Equals("ask", StringComparison.OrdinalIgnoreCase) ||
                      mode.Equals("question", StringComparison.OrdinalIgnoreCase) ||
-                     mode.Equals("input", StringComparison.OrdinalIgnoreCase)) color = settings.ColorAsk;
+                     mode.Equals("input", StringComparison.OrdinalIgnoreCase))
+            {
+                color = settings.ColorAsk;
+                // An explicit --alpha on the command line still wins.
+                if (!overrides.ContainsKey("alpha")) settings.Alpha = settings.AlphaAsk;
+            }
             else color = ParseColor(mode, settings.ColorDone);
 
             Run(color, settings);
@@ -362,13 +367,28 @@ namespace ClaudeFlash
                     case "red": return ColorTranslator.FromHtml("#FF3B30");
                     case "blue": return ColorTranslator.FromHtml("#2E9BFF");
                     case "purple": return ColorTranslator.FromHtml("#B368FF");
+                    case "violet": return ColorTranslator.FromHtml("#A855F7");
+                    case "lavender": return ColorTranslator.FromHtml("#B9A7FF");
+                    case "indigo": return ColorTranslator.FromHtml("#7C6BFF");
+                    case "teal": return ColorTranslator.FromHtml("#00C9A7");
+                    case "pink": return ColorTranslator.FromHtml("#FF7AB8");
                     case "cyan": return ColorTranslator.FromHtml("#00E5FF");
                     case "white": return ColorTranslator.FromHtml("#FFFFFF");
                 }
-                if (!s.StartsWith("#", StringComparison.Ordinal) && s.Length == 6) s = "#" + s;
+                // Only add the # when the text really is six hex digits. Testing length
+                // alone turned every six-letter colour name into "#violet", which failed
+                // to parse and silently fell back to green.
+                if (!s.StartsWith("#", StringComparison.Ordinal) && s.Length == 6 && IsHex(s)) s = "#" + s;
                 return ColorTranslator.FromHtml(s);
             }
             catch { return fallback; }
+        }
+
+        private static bool IsHex(string s)
+        {
+            foreach (char c in s)
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) return false;
+            return true;
         }
 
         private static void EnableDpiAwareness()
@@ -387,6 +407,10 @@ namespace ClaudeFlash
     internal sealed class Settings
     {
         public double Alpha = 0.28;
+        // Blue reads as blue only while it stays saturated, and a saturated tint at the
+        // green's opacity is harsher than it needs to be. Lightening the colour instead
+        // just turns the wash white, so the ask colour gets its own alpha.
+        public double AlphaAsk = 0.20;
         public int FadeInMs = 70;
         public int HoldMs = 420;
         public int FadeOutMs = 560;
@@ -395,7 +419,7 @@ namespace ClaudeFlash
         public int MaxMs = 6000;
         public double Vignette = 0.32;
         public Color ColorDone = ColorTranslator.FromHtml("#00FF5A");
-        public Color ColorAsk = ColorTranslator.FromHtml("#FFAA00");
+        public Color ColorAsk = ColorTranslator.FromHtml("#08A9FF");
         public string SkipIfFocused = "";
 
         private const string Template =
@@ -403,6 +427,10 @@ namespace ClaudeFlash
             "\r\n" +
             "# Peak opacity of the tint, 0..1. Higher = harder to miss.\r\n" +
             "alpha=0.28\r\n" +
+            "\r\n" +
+            "# Opacity for the 'ask' colour. Blue needs to stay saturated to read as blue\r\n" +
+            "# rather than white haze, so soften it here instead of lightening the colour.\r\n" +
+            "alpha_ask=0.20\r\n" +
             "\r\n" +
             "# Animation, in milliseconds.\r\n" +
             "fade_in_ms=70\r\n" +
@@ -422,7 +450,7 @@ namespace ClaudeFlash
             "\r\n" +
             "# Colors.\r\n" +
             "color_done=#00FF5A\r\n" +
-            "color_ask=#FFAA00\r\n" +
+            "color_ask=#08A9FF\r\n" +
             "\r\n" +
             "# Comma-separated process names. If one of them owns the focused window when\r\n" +
             "# the flash fires, it is skipped - you were already looking at it.\r\n" +
@@ -460,6 +488,7 @@ namespace ClaudeFlash
                 foreach (KeyValuePair<string, string> kv in overrides) values[kv.Key] = kv.Value;
 
             s.Alpha = Clamp(GetDouble(values, "alpha", s.Alpha), 0.02, 1.0);
+            s.AlphaAsk = Clamp(GetDouble(values, "alpha_ask", s.AlphaAsk), 0.02, 1.0);
             s.Vignette = Clamp(GetDouble(values, "vignette", s.Vignette), 0.0, 0.9);
             s.FadeInMs = (int)Clamp(GetDouble(values, "fade_in_ms", s.FadeInMs), 0, 5000);
             s.HoldMs = (int)Clamp(GetDouble(values, "hold_ms", s.HoldMs), 0, 10000);
