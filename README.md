@@ -6,6 +6,7 @@ something else, and let peripheral vision tell you when to come back.
 
 - **Green** — Claude finished responding.
 - **Blue** — Claude has a question for you.
+- **Violet** — Claude wants permission to run something.
 
 The overlay is click-through and never takes focus, so it can't eat a keystroke
 or a click. Any mouse button or key makes it vanish immediately.
@@ -51,6 +52,7 @@ Full command list:
 flash                 green flash
 flash done            green flash
 flash ask             blue flash
+flash perm            violet flash
 flash <color>         green | amber | red | blue | violet | lavender | indigo
                       | teal | pink | purple | cyan | white | #RRGGBB
 flash on | off | toggle | status | help
@@ -82,6 +84,8 @@ vignette=0.32        # 0 = flat tint. higher = clearer in the middle, so you can
                      # still read what's underneath
 color_done=#00FF5A
 color_ask=#08A9FF
+color_perm=#A855F7   # shown when Claude asks permission to run something
+alpha_perm=0.22
 skip_if_focused=     # comma-separated process names; skip the flash when one of
                      # them is already the focused window
 ```
@@ -112,11 +116,33 @@ suppresses it whenever you're already looking at the terminal.
 Green comes from `Stop`. Blue comes from `PreToolUse` matching
 `AskUserQuestion` — the tool call Claude makes when it asks you something.
 
-`Notification` entries are installed too, matched per type (`permission_prompt`,
-`idle_prompt`, `elicitation_dialog`, `agent_needs_input`). On the Windows desktop
-app these never fired in testing — not with a `"*"` matcher, not with exact
-types, not with no matcher at all — so don't rely on them. They're kept because
-they cost nothing and do fire in other setups.
+Violet comes from `Notification` matching `permission_prompt`. The other
+`Notification` types (`idle_prompt`, `elicitation_dialog`, `agent_needs_input`)
+map to blue.
+
+Caveat on `Notification`: on the Windows desktop app, `idle_prompt` and
+`elicitation_dialog` did not fire in testing, so blue is driven off
+`PreToolUse`/`AskUserQuestion` instead, which does. `permission_prompt` is
+untested — no permission prompt came up during testing — so violet may or may
+not fire for you. It costs nothing if it doesn't.
+
+## Where it works
+
+| | |
+|---|---|
+| Claude Code, desktop app | yes — green and blue verified here |
+| Claude Code, terminal (CLI) | yes — same `~/.claude/settings.json`, same hooks |
+| Claude Code, VS Code / JetBrains | yes — those run Claude Code underneath |
+| Claude Code on the web | no — runs in the cloud, can't reach your machine |
+| Normal Claude chats (app or browser) | no — no hook system exists for them |
+| Claude Code inside WSL / over SSH | no — hooks run in Linux, where `flash.exe` isn't |
+| `flash` as a plain command | yes — anywhere on this Windows machine |
+
+Anything that can run a command can trigger it, Claude or not:
+
+```bash
+npm run build; flash green
+```
 
 Two things worth knowing if you extend this:
 

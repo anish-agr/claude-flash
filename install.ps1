@@ -125,10 +125,17 @@ if (-not $NoHooks) {
     # One entry per notification type rather than a single wildcard. A bare "*" and an
     # absent matcher both failed to fire; an exact type matches whether the matcher is
     # compared literally or as a regex.
-    $needsYou = 'permission_prompt', 'idle_prompt', 'elicitation_dialog', 'agent_needs_input'
+    # permission_prompt gets its own colour: "may I run this" is a different ask from
+    # "answer my question".
+    $needsYou = [ordered]@{
+        permission_prompt  = 'perm'
+        idle_prompt        = 'ask'
+        elicitation_dialog = 'ask'
+        agent_needs_input  = 'ask'
+    }
     $entries = @()
-    foreach ($type in $needsYou) {
-        $commands = @([pscustomobject]@{ type = 'command'; command = ('"{0}" ask --bg' -f $exe) })
+    foreach ($type in $needsYou.Keys) {
+        $commands = @([pscustomobject]@{ type = 'command'; command = ('"{0}" {1} --bg' -f $exe, $needsYou[$type]) })
         if ($Diagnose) {
             $commands += [pscustomobject]@{
                 type    = 'command'

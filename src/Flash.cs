@@ -169,6 +169,12 @@ namespace ClaudeFlash
                 // An explicit --alpha on the command line still wins.
                 if (!overrides.ContainsKey("alpha")) settings.Alpha = settings.AlphaAsk;
             }
+            else if (mode.Equals("perm", StringComparison.OrdinalIgnoreCase) ||
+                     mode.Equals("permission", StringComparison.OrdinalIgnoreCase))
+            {
+                color = settings.ColorPerm;
+                if (!overrides.ContainsKey("alpha")) settings.Alpha = settings.AlphaPerm;
+            }
             else color = ParseColor(mode, settings.ColorDone);
 
             Run(color, settings);
@@ -420,6 +426,8 @@ namespace ClaudeFlash
         public double Vignette = 0.32;
         public Color ColorDone = ColorTranslator.FromHtml("#00FF5A");
         public Color ColorAsk = ColorTranslator.FromHtml("#08A9FF");
+        public Color ColorPerm = ColorTranslator.FromHtml("#A855F7");
+        public double AlphaPerm = 0.22;
         public string SkipIfFocused = "";
 
         private const string Template =
@@ -451,6 +459,10 @@ namespace ClaudeFlash
             "# Colors.\r\n" +
             "color_done=#00FF5A\r\n" +
             "color_ask=#08A9FF\r\n" +
+            "\r\n" +
+            "# Shown when Claude asks permission to run something.\r\n" +
+            "color_perm=#A855F7\r\n" +
+            "alpha_perm=0.22\r\n" +
             "\r\n" +
             "# Comma-separated process names. If one of them owns the focused window when\r\n" +
             "# the flash fires, it is skipped - you were already looking at it.\r\n" +
@@ -489,6 +501,7 @@ namespace ClaudeFlash
 
             s.Alpha = Clamp(GetDouble(values, "alpha", s.Alpha), 0.02, 1.0);
             s.AlphaAsk = Clamp(GetDouble(values, "alpha_ask", s.AlphaAsk), 0.02, 1.0);
+            s.AlphaPerm = Clamp(GetDouble(values, "alpha_perm", s.AlphaPerm), 0.02, 1.0);
             s.Vignette = Clamp(GetDouble(values, "vignette", s.Vignette), 0.0, 0.9);
             s.FadeInMs = (int)Clamp(GetDouble(values, "fade_in_ms", s.FadeInMs), 0, 5000);
             s.HoldMs = (int)Clamp(GetDouble(values, "hold_ms", s.HoldMs), 0, 10000);
@@ -497,6 +510,7 @@ namespace ClaudeFlash
             s.MinVisibleMs = (int)Clamp(GetDouble(values, "min_visible_ms", s.MinVisibleMs), 0, 2000);
             s.ColorDone = Program.ParseColor(GetString(values, "color_done", null), s.ColorDone);
             s.ColorAsk = Program.ParseColor(GetString(values, "color_ask", null), s.ColorAsk);
+            s.ColorPerm = Program.ParseColor(GetString(values, "color_perm", null), s.ColorPerm);
             s.SkipIfFocused = GetString(values, "skip_if_focused", "");
             s.MaxMs = s.FadeInMs + s.HoldMs + s.FadeOutMs + 3000;
 
