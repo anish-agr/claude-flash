@@ -4,6 +4,11 @@ Washes your whole screen in colour for about a second when Claude Code wants
 you. Look away, get on with something else, and let peripheral vision tell you
 when to come back.
 
+**Windows only.** The overlay is built on Win32 — `UpdateLayeredWindow`,
+`WS_EX_TRANSPARENT`, `GetAsyncKeyState` — and the installer uses PowerShell and
+the registry. macOS and Linux would each need their own overlay written from
+scratch; see [Other platforms](#other-platforms).
+
 | Colour | Means | Fires on |
 |---|---|---|
 | **Green** `#00FF5A` | Claude finished responding | `Stop` |
@@ -154,12 +159,28 @@ That suppresses it whenever you're already looking at the terminal.
 | Claude Code inside WSL / over SSH | no — hooks run in Linux, where `flash.exe` isn't |
 | Exclusive-fullscreen games | probably not — topmost overlays get suppressed. Borderless fullscreen is fine |
 | `flash` as a plain command | yes — anywhere on this Windows machine |
+| macOS / Linux | no — Windows only, see below |
 
 Anything that can run a command can trigger it, Claude or not:
 
 ```bash
 npm run build; flash green
 ```
+
+### Other platforms
+
+Windows only, and not portably fixable — the overlay is Win32 all the way down.
+The hook wiring would carry over, since `~/.claude/settings.json` is the same
+everywhere; only the thing it launches has to be rewritten.
+
+- **macOS** — a borderless `NSWindow` at `.screenSaver` level with
+  `ignoresMouseEvents = true`, one per `NSScreen`. Swift, roughly a hundred
+  lines. The installer would become a shell script writing the same JSON.
+- **Linux** — depends on the compositor. On X11, an override-redirect window
+  with an input region set to empty via the XShape extension. On Wayland there
+  is no portable equivalent; `wlr-layer-shell` covers wlroots compositors only.
+
+The colour and timing logic in `config.ini` is plain text and would port as is.
 
 ## How it works
 
