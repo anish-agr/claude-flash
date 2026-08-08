@@ -177,8 +177,8 @@ if (-not $NoHooks) {
         # when you get prompted; with tools pre-approved it fires without a prompt too.
         # AskUserQuestion is deliberately excluded so it keeps its own colour.
         $tools = 'Bash|PowerShell|Write|Edit|NotebookEdit|WebFetch|WebSearch|Task|Agent'
-        Set-FlashHook $settings.hooks 'PreToolUse' ('"{0}" perm --bg' -f $exe) $tools
-        Step "Permission flash on -> violet before a tool runs"
+        Set-FlashHook $settings.hooks 'PreToolUse' ('"{0}" perm --bg --require_mode=default,plan' -f $exe) $tools
+        Step "Permission flash on -> violet, only in modes that actually ask"
     }
 
     if ($Diagnose) {

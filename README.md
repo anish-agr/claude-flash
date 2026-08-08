@@ -8,7 +8,7 @@ when to come back.
 |---|---|---|
 | **Green** `#00FF5A` | Claude finished responding | `Stop` |
 | **Blue** `#08A9FF` | Claude has a question for you | `PreToolUse` / `AskUserQuestion` |
-| **Violet** `#A855F7` | Claude wants to run something | `Notification` / `permission_prompt` — opt-in, see below |
+| **Violet** `#A855F7` | Claude wants permission to run something | `PreToolUse`, gated on permission mode — opt-in |
 
 The overlay is click-through and never takes focus, so it can't eat a keystroke
 or a click. Any mouse button or key makes it vanish immediately.
@@ -21,9 +21,9 @@ Double-click **`setup.cmd`**, or:
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-Only add `-PermissionFlash` if you approve tools by hand. In auto-approve or
-bypass mode it flashes for calls you were never asked about — see [Permission
-flashes](#permission-flashes-and-why-theyre-off-by-default):
+Add `-PermissionFlash` for the violet signal. It only fires in permission modes
+that actually stop and ask, so it stays silent under auto-approve or bypass —
+see [Permission flashes](#permission-flashes):
 
 ```bash
 powershell -ExecutionPolicy Bypass -File install.ps1 -PermissionFlash
@@ -183,7 +183,7 @@ are already there:
 `--bg` makes the process relaunch itself detached and return in a few
 milliseconds, so the hook never delays Claude Code.
 
-### Permission flashes, and why they're off by default
+### Permission flashes
 
 There is no reliable "permission requested" event. `Notification` is supposed to
 provide one, but on the Windows desktop app it never fired in testing — not
@@ -192,19 +192,29 @@ provide one, but on the Windows desktop app it never fired in testing — not
 they cost nothing and are correct if the event ever does fire: they only trigger
 on a real prompt.
 
-`-PermissionFlash` is the fallback, and it is a genuine approximation, not an
-equivalent. It hangs off `PreToolUse` on common tool names, which fires **before
-a tool runs — whether or not you are asked anything**. Nothing in the hook
-payload distinguishes "about to prompt" from "already approved".
+`-PermissionFlash` is the fallback. It hangs off `PreToolUse` on common tool
+names, which fires before a tool runs — whether or not you get asked anything.
+On its own that would flash constantly under auto-approve.
 
-So:
+What makes it safe is `--require_mode=default,plan`. Claude Code sends every
+hook a JSON payload on stdin containing `permission_mode`, so the flash can check
+which mode you're in and stay quiet unless it's one that actually stops to ask:
 
-- **Manual approval mode** — the two coincide, and it behaves correctly.
-- **Auto-approve or bypass mode** — it flashes constantly for calls you were
-  never asked about. Don't enable it.
+| `permission_mode` | Flashes? |
+|---|---|
+| `default` | yes — you get prompted |
+| `plan` | yes |
+| `acceptEdits` | no |
+| `auto` | no |
+| `dontAsk` | no |
+| `bypassPermissions` | no |
 
-Leave it off unless you approve tools by hand. Without it, every flash this tool
-produces corresponds to something that genuinely needs you.
+So it follows whatever mode you're in, per tool call, with no configuration.
+Switch to bypass and violet goes quiet on its own; switch back to manual and it
+returns.
+
+The check runs before the process relaunches itself, so a suppressed flash costs
+one short-lived process and nothing on screen.
 
 ### Two gotchas worth knowing
 

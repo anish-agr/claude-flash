@@ -116,6 +116,14 @@ namespace ClaudeFlash
 
             if (!IsEnabled()) return 0;
 
+            // --require_mode=default,plan : only flash if Claude is in a permission mode
+            // that actually stops and asks. Checked before the relaunch so a suppressed
+            // flash costs one short-lived process and nothing on screen.
+            string requireMode;
+            if (!overrides.TryGetValue("require_mode", out requireMode))
+                overrides.TryGetValue("require-mode", out requireMode);
+            if (!string.IsNullOrEmpty(requireMode) && !ModeAllows(requireMode)) return 0;
+
             if (background)
             {
                 Relaunch(argv);
@@ -334,6 +342,41 @@ namespace ClaudeFlash
         }
 
         // ---- process helpers ---------------------------------------------------
+
+        /// <summary>
+        /// Claude Code sends each hook a JSON payload on stdin carrying permission_mode:
+        /// "default", "plan", "acceptEdits", "auto", "dontAsk" or "bypassPermissions".
+        /// Only the first two actually stop and ask, so gating on them is what keeps the
+        /// permission flash from firing on calls that were auto-approved.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool ModeAllows(string allowed)
+        {
+            string payload;
+            try
+            {
+                // Not redirected means a human ran this by hand, so there is nothing to
+                // gate on and the flash should just happen.
+                if (!Console.IsInputRedirected) return true;
+                payload = Console.In.ReadToEnd();
+            }
+            catch { return true; }
+
+            if (string.IsNullOrEmpty(payload)) return false;
+
+            const string key = "\"permission_mode\"";
+            int i = payload.IndexOf(key, StringComparison.Ordinal);
+            if (i < 0) return false;                      // can't tell -> stay quiet
+            i = payload.IndexOf('"', i + key.Length);     // opening quote of the value
+            if (i < 0) return false;
+            int end = payload.IndexOf('"', i + 1);
+            if (end < 0) return false;
+            string mode = payload.Substring(i + 1, end - i - 1);
+
+            foreach (string want in allowed.Split(','))
+                if (string.Equals(want.Trim(), mode, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void Relaunch(string[] argv)
