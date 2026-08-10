@@ -91,24 +91,24 @@ if (-not $NoHooks) {
         $settings | Add-Member -NotePropertyName hooks -NotePropertyValue ([pscustomobject]@{}) -Force
     }
 
-    # Drop any diagnostic loggers left behind by a previous -Diagnose run, including
-    # ones on events this script does not otherwise manage.
+    # Clear out every entry this installer owns, across all events, before adding any
+    # back. Doing it once up front means each Set-FlashHook call can simply append.
+    #
+    # The previous version filtered inside Set-FlashHook instead, which silently
+    # deleted our OWN other entries on the same event: adding the violet PreToolUse
+    # hook wiped the blue AskUserQuestion one, because both matched "flash.exe".
     foreach ($ev in @($settings.hooks.PSObject.Properties.Name)) {
         $survivors = @($settings.hooks.$ev) | Where-Object {
-            $_ -and (($_ | ConvertTo-Json -Depth 10 -Compress) -notmatch 'ClaudeFlash\\\\hook\.log')
+            $_ -and (($_ | ConvertTo-Json -Depth 10 -Compress) -notmatch 'flash\.exe|ClaudeFlash\\\\hook\.log')
         }
         if ($survivors.Count -eq 0) { $settings.hooks.PSObject.Properties.Remove($ev) }
         else { $settings.hooks.$ev = $survivors }
     }
 
     function Set-FlashHook($hooks, [string]$Event, [string]$Command, [string]$Matcher) {
-        # Keep any hooks the user already had; replace only our own.
+        # Everything of ours is already gone, so this only ever appends.
         $kept = @()
-        if ($hooks.PSObject.Properties.Name -contains $Event) {
-            $kept = @($hooks.$Event) | Where-Object {
-                $_ -and (($_ | ConvertTo-Json -Depth 10 -Compress) -notmatch 'flash\.exe|ClaudeFlash')
-            }
-        }
+        if ($hooks.PSObject.Properties.Name -contains $Event) { $kept = @($hooks.$Event) | Where-Object { $_ } }
         $entry = [pscustomobject]@{
             hooks = @([pscustomobject]@{ type = 'command'; command = $Command })
         }
@@ -158,9 +158,7 @@ if (-not $NoHooks) {
 
     $keptNotif = @()
     if ($settings.hooks.PSObject.Properties.Name -contains 'Notification') {
-        $keptNotif = @($settings.hooks.Notification) | Where-Object {
-            $_ -and (($_ | ConvertTo-Json -Depth 10 -Compress) -notmatch 'flash\.exe|ClaudeFlash')
-        }
+        $keptNotif = @($settings.hooks.Notification) | Where-Object { $_ }
     }
     $value = $entries + $keptNotif
     if ($settings.hooks.PSObject.Properties.Name -contains 'Notification') { $settings.hooks.Notification = $value }
