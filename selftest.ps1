@@ -20,20 +20,36 @@ function Check([string]$name, [bool]$ok, [string]$detail = '') {
 
 function Wait-Idle { while (Get-Process -Name flash -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 40 } }
 
-# Runs the hook the way Claude Code does and reports whether a flash appeared.
-function Invoke-Hook([string]$command, [string]$mode) {
-    Wait-Idle
-    $json = '{"session_id":"selftest","permission_mode":"' + $mode +
-            '","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{}}'
-    $json | cmd.exe /c $command | Out-Null
-    $seen = $false
+# A flash is only proven by an overlay actually rendering. The --bg parent is also
+# called flash.exe and lives ~300ms, so process presence is not evidence.
+$script:lastFlashFile = Join-Path $env:LOCALAPPDATA 'ClaudeFlash\lastflash'
+function Get-FlashStamp { if (Test-Path $script:lastFlashFile) { [IO.File]::ReadAllText($script:lastFlashFile) } else { '' } }
+function Wait-Flash([int]$ms) {
+    $before = $script:stampBefore
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    while ($sw.ElapsedMilliseconds -lt 1500) {
-        if (@(Get-Process -Name flash -ErrorAction SilentlyContinue).Count -gt 0) { $seen = $true; break }
+    while ($sw.ElapsedMilliseconds -lt $ms) {
+        if ((Get-FlashStamp) -ne $before) { Wait-Idle; return $true }
         Start-Sleep -Milliseconds 25
     }
     Wait-Idle
-    return $seen
+    return $false
+}
+
+# Runs the hook the way Claude Code does and reports whether a flash appeared.
+$script:hookSeq = 0
+function Invoke-Hook([string]$command, [string]$mode) {
+    Wait-Idle
+    # A unique tool_use_id per call, and no matching PostToolUse, so a hook using
+    # --wait_prompt sees an unfinished call and flashes. The window has to exceed
+    # that wait, hence 3s rather than 1.5s.
+    $script:hookSeq++
+    $id = "selftesthook$script:hookSeq"
+    $json = '{"session_id":"selftest","permission_mode":"' + $mode +
+            '","hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"' + $id +
+            '","tool_input":{}}'
+    $script:stampBefore = Get-FlashStamp
+    $json | cmd.exe /c $command | Out-Null
+    return (Wait-Flash 3500)
 }
 
 Write-Host "`nClaudeFlash self-test" -ForegroundColor Cyan
@@ -72,12 +88,12 @@ $permHook = Find-Hook 'PreToolUse' '*Bash*' 'perm'
 Check "green: Stop -> done" ([bool]$stopHook)
 Check "blue: PreToolUse/AskUserQuestion -> ask" ([bool]$askHook)
 if ($permHook) {
-    Check "violet: PreToolUse/tools -> perm" $true
-    Check "violet is gated on permission mode" ($permHook -match 'require_mode')
+    Check "purple: PreToolUse/tools -> perm" $true
+    Check "purple is gated on permission mode" ($permHook -match 'require_mode')
 } else {
-    Write-Host "  SKIP  violet not installed (run install.ps1 -PermissionFlash)" -ForegroundColor DarkYellow
+    Write-Host "  SKIP  purple not installed (run install.ps1 -PermissionFlash)" -ForegroundColor DarkYellow
 }
-Check "blue and violet coexist" (-not ($askHook -and -not $permHook -and $false) -and [bool]$askHook)
+Check "blue and purple coexist" (-not ($askHook -and -not $permHook -and $false) -and [bool]$askHook)
 
 # ---- 3. flashes actually fire ----------------------------------------------
 Write-Host "`nBehaviour" -ForegroundColor White
@@ -86,12 +102,51 @@ if ($askHook)  { Check "blue fires" (Invoke-Hook $askHook 'default') }
 if ($askHook)  { Check "blue fires in bypass too (questions always need you)" (Invoke-Hook $askHook 'bypassPermissions') }
 
 if ($permHook) {
-    foreach ($m in 'default', 'plan') {
-        Check "violet fires in $m" (Invoke-Hook $permHook $m)
+    foreach ($m in 'default', 'plan', 'acceptEdits') {
+        Check "purple fires in $m" (Invoke-Hook $permHook $m)
     }
-    foreach ($m in 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions') {
-        Check "violet silent in $m" (-not (Invoke-Hook $permHook $m))
+    foreach ($m in 'auto', 'dontAsk', 'bypassPermissions') {
+        Check "purple silent in $m" (-not (Invoke-Hook $permHook $m))
     }
+}
+
+# ---- 3b. approved vs blocked -------------------------------------------------
+# The point of the permission flash: an approved call finishes on its own and must
+# stay silent; a call still waiting on you must flash.
+if ($permHook) {
+    Write-Host "`nApproved vs blocked" -ForegroundColor White
+    $pend = Join-Path $env:LOCALAPPDATA 'ClaudeFlash\pending'
+    $markHook = $null
+    foreach ($e in @($h.PostToolUse)) {
+        foreach ($cmd in @($e.hooks | ForEach-Object { $_.command })) {
+            if ($cmd -match 'flash\.exe.*\bmark\b') { $markHook = $cmd; break }
+        }
+        if ($markHook) { break }
+    }
+    Check "PostToolUse mark hook registered" ([bool]$markHook)
+
+    function Clear-Pending {
+        if ([IO.Directory]::Exists($pend)) {
+            foreach ($f in [IO.Directory]::GetFiles($pend)) { try { [IO.File]::Delete($f) } catch {} }
+        }
+    }
+    function Invoke-Pair([string]$id, [bool]$complete) {
+        Clear-Pending; Wait-Idle
+        $pre = '{"permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"' + $id + '"}'
+        $script:stampBefore = Get-FlashStamp
+        $pre | cmd.exe /c $permHook | Out-Null
+        if ($complete -and $markHook) {
+            Start-Sleep -Milliseconds 300
+            ('{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_use_id":"' + $id + '"}') | cmd.exe /c $markHook | Out-Null
+        }
+        $seen = Wait-Flash 3500
+        Clear-Pending
+        return $seen
+    }
+
+    Check "silent when the call completes (already approved)" (-not (Invoke-Pair 'selftestA' $true))
+    Check "flashes when the call is still waiting (prompt up)" (Invoke-Pair 'selftestB' $false)
+    Check "no marker files left behind" (@([IO.Directory]::GetFiles($pend)).Count -eq 0)
 }
 
 # ---- 4. enable / disable ----------------------------------------------------

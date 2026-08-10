@@ -2,7 +2,7 @@
 //
 // Green  = Claude finished responding   (Stop)
 // Blue   = Claude has a question        (PreToolUse / AskUserQuestion)
-// Violet = Claude wants to run something (PreToolUse / tool names, opt-in)
+// Purple = Claude is blocked waiting for your approval (PreToolUse + PostToolUse)
 //
 // The overlay is a click-through layered window: it never steals focus and never
 // swallows a click. Any mouse button or key press dismisses it instantly.
@@ -34,7 +34,7 @@ namespace ClaudeFlash
             "  flash                 green flash (Claude is done)\r\n" +
             "  flash done            green flash\r\n" +
             "  flash ask             blue flash (Claude has a question)\r\n" +
-            "  flash perm            violet flash (Claude wants to run something)\r\n" +
+            "  flash perm            purple flash (Claude is waiting on your approval)\r\n" +
             "  flash <color>         green | blue | violet | amber | red | lavender | indigo\r\n" +
             "                        | teal | pink | purple | cyan | white | #RRGGBB\r\n\r\n" +
             "  flash set <key> <val> change a setting, e.g. flash set color_ask #08A9FF\r\n" +
@@ -119,15 +119,70 @@ namespace ClaudeFlash
             // --require_mode=default,plan : only flash if Claude is in a permission mode
             // that actually stops and asks. Checked before the relaunch so a suppressed
             // flash costs one short-lived process and nothing on screen.
-            string requireMode;
-            if (!overrides.TryGetValue("require_mode", out requireMode))
-                overrides.TryGetValue("require-mode", out requireMode);
-            if (!string.IsNullOrEmpty(requireMode) && !ModeAllows(requireMode)) return 0;
+            bool debug = overrides.ContainsKey("debug_payload");
+
+            if (command == "mark") return MarkDone(debug);
+
+            // Present with no value means "take the list from config", so the modes can
+            // be changed without reinstalling the hooks.
+            bool gateOnMode = overrides.ContainsKey("require_mode") || overrides.ContainsKey("require-mode");
+            if (gateOnMode)
+            {
+                string requireMode;
+                if (!overrides.TryGetValue("require_mode", out requireMode))
+                    overrides.TryGetValue("require-mode", out requireMode);
+                if (string.IsNullOrEmpty(requireMode)) requireMode = ConfigValue("perm_modes");
+                if (string.IsNullOrEmpty(requireMode)) requireMode = "default,plan,acceptEdits";
+                if (!ModeAllows(requireMode, debug)) return 0;
+            }
+
+            // Runtime switch, so turning the permission flash off never needs a reinstall
+            // or a Claude restart: the hooks stay put and this just declines to fire.
+            if (command == "perm" && IsOff(ConfigValue("perm_flash"))) return 0;
+
+            // Present with no value (`--wait_prompt`) means "take the delay from config",
+            // which is what lets prompt_wait_ms be retuned without touching the hooks.
+            bool waitForPrompt = overrides.ContainsKey("wait_prompt");
+            string waitPrompt = waitForPrompt ? overrides["wait_prompt"] : null;
 
             if (background)
             {
-                Relaunch(argv);
+                string extra = null;
+                if (waitForPrompt)
+                {
+                    // Only the parent has stdin, so the id has to be handed to the child.
+                    string id = JsonString(ReadPayload(debug), "tool_use_id");
+                    string marker = string.IsNullOrEmpty(id) ? null : MarkerPath(id);
+                    if (marker == null) return 0;         // nothing to correlate -> stay quiet
+                    try { File.WriteAllText(marker, ""); }
+                    catch { return 0; }
+                    Trace("PreToolUse armed id=" + Path.GetFileName(marker));
+                    extra = "--tool_use_id=" + Path.GetFileName(marker);
+                }
+                Relaunch(argv, extra);
                 return 0;
+            }
+
+            // Detached child: give the tool a moment to finish on its own. If it did,
+            // it was approved already and there is nothing to tell the user about.
+            if (waitForPrompt)
+            {
+                string id;
+                if (overrides.TryGetValue("tool_use_id", out id) && !string.IsNullOrEmpty(id))
+                {
+                    int waitMs;
+                    if (!int.TryParse(waitPrompt, NumberStyles.Integer, CultureInfo.InvariantCulture, out waitMs) &&
+                        !int.TryParse(ConfigValue("prompt_wait_ms"), NumberStyles.Integer, CultureInfo.InvariantCulture, out waitMs))
+                        waitMs = 3000;
+                    if (waitMs < 200) waitMs = 200;
+                    Thread.Sleep(waitMs);
+
+                    string marker = MarkerPath(id);
+                    Trace("child woke id=" + id + " stillPending=" + (marker != null && File.Exists(marker)));
+                    if (marker == null || !File.Exists(marker)) return 0;
+                    try { File.Delete(marker); }
+                    catch { }
+                }
             }
 
             return Flash(mode, overrides);
@@ -216,7 +271,8 @@ namespace ClaudeFlash
         private static readonly string[] KnownKeys = {
             "alpha", "alpha_ask", "alpha_perm", "fade_in_ms", "hold_ms", "fade_out_ms",
             "dismiss_fade_ms", "min_visible_ms", "vignette",
-            "color_done", "color_ask", "color_perm", "skip_if_focused"
+            "color_done", "color_ask", "color_perm",
+            "perm_flash", "perm_modes", "prompt_wait_ms", "skip_if_focused"
         };
 
         /// <summary>
@@ -264,7 +320,20 @@ namespace ClaudeFlash
                     return 1;
                 }
             }
-            else if (!key.Equals("skip_if_focused", StringComparison.Ordinal))
+            else if (key.Equals("perm_flash", StringComparison.Ordinal))
+            {
+                bool on = val.Equals("on", StringComparison.OrdinalIgnoreCase) ||
+                          val.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                          val.Equals("yes", StringComparison.OrdinalIgnoreCase) || val == "1";
+                if (!on && !IsOff(val))
+                {
+                    MessageBox.Show("perm_flash must be on or off, not: " + val,
+                        "ClaudeFlash", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return 1;
+                }
+            }
+            else if (!key.Equals("skip_if_focused", StringComparison.Ordinal) &&
+                     !key.Equals("perm_modes", StringComparison.Ordinal))
             {
                 double n;
                 if (!double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out n))
@@ -316,6 +385,13 @@ namespace ClaudeFlash
 
         private static void Run(Color color, Settings settings)
         {
+            // Records that an overlay really rendered. Watching for a "flash.exe" process
+            // is not the same thing - the short-lived --bg parent has that name too, and
+            // mistaking it for a flash is exactly how selftest.ps1 passed while the
+            // permission flash was silently broken.
+            try { File.WriteAllText(Path.Combine(DataDir(), "lastflash"), DateTime.UtcNow.Ticks.ToString(CultureInfo.InvariantCulture)); }
+            catch { }
+
             ClaimSingleInstance();
             using (var ctx = new FlashContext(color, settings))
             {
@@ -343,48 +419,158 @@ namespace ClaudeFlash
 
         // ---- process helpers ---------------------------------------------------
 
-        /// <summary>
-        /// Claude Code sends each hook a JSON payload on stdin carrying permission_mode:
-        /// "default", "plan", "acceptEdits", "auto", "dontAsk" or "bypassPermissions".
-        /// Only the first two actually stop and ask, so gating on them is what keeps the
-        /// permission flash from firing on calls that were auto-approved.
-        /// </summary>
+        // Claude Code sends each hook a JSON payload on stdin carrying permission_mode:
+        // "default", "plan", "acceptEdits", "auto", "dontAsk" or "bypassPermissions".
+        // Only the first two actually stop and ask.
+        private static string _payload;
+        private static bool _payloadRead;
+
+        /// <summary>stdin, read at most once - a second ReadToEnd would return nothing.</summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static bool ModeAllows(string allowed)
+        private static string ReadPayload(bool debug)
         {
-            string payload;
-            try
+            if (_payloadRead) return _payload;
+            _payloadRead = true;
+            try { _payload = Console.IsInputRedirected ? Console.In.ReadToEnd() : null; }
+            catch { _payload = null; }
+
+            if (debug)
             {
-                // Not redirected means a human ran this by hand, so there is nothing to
-                // gate on and the flash should just happen.
-                if (!Console.IsInputRedirected) return true;
-                payload = Console.In.ReadToEnd();
+                try
+                {
+                    File.AppendAllText(Path.Combine(DataDir(), "payload.log"),
+                        DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture) + "  " +
+                        (string.IsNullOrEmpty(_payload) ? "<no stdin>" : _payload) + Environment.NewLine);
+                }
+                catch { }
             }
-            catch { return true; }
+            return _payload;
+        }
 
-            if (string.IsNullOrEmpty(payload)) return false;
-
-            const string key = "\"permission_mode\"";
+        /// <summary>Pulls one string value out of the hook JSON without a JSON parser.</summary>
+        private static string JsonString(string payload, string name)
+        {
+            if (string.IsNullOrEmpty(payload)) return null;
+            string key = "\"" + name + "\"";
             int i = payload.IndexOf(key, StringComparison.Ordinal);
-            if (i < 0) return false;                      // can't tell -> stay quiet
-            i = payload.IndexOf('"', i + key.Length);     // opening quote of the value
-            if (i < 0) return false;
+            if (i < 0) return null;
+            i = payload.IndexOf('"', i + key.Length);      // opening quote of the value
+            if (i < 0) return null;
             int end = payload.IndexOf('"', i + 1);
-            if (end < 0) return false;
-            string mode = payload.Substring(i + 1, end - i - 1);
+            if (end < 0) return null;
+            return payload.Substring(i + 1, end - i - 1);
+        }
+
+        private static bool ModeAllows(string allowed, bool debug)
+        {
+            // No stdin means a human ran this by hand, so there is nothing to gate on.
+            string payload = ReadPayload(debug);
+            if (payload == null) return true;
+            if (payload.Length == 0) return false;
+
+            string mode = JsonString(payload, "permission_mode");
+            if (string.IsNullOrEmpty(mode)) { Trace("ModeAllows: no permission_mode in payload -> suppress"); return false; }
 
             foreach (string want in allowed.Split(','))
-                if (string.Equals(want.Trim(), mode, StringComparison.OrdinalIgnoreCase)) return true;
+                if (string.Equals(want.Trim(), mode, StringComparison.OrdinalIgnoreCase))
+                { Trace("ModeAllows: mode=" + mode + " allowed"); return true; }
+
+            Trace("ModeAllows: mode=" + mode + " not in [" + allowed + "] -> suppress");
             return false;
         }
 
+        // ---- "is Claude actually blocked on me?" -------------------------------
+        //
+        // PreToolUse fires for every tool call and says nothing about whether you are
+        // about to be asked. But an approved call completes on its own, while a
+        // prompted one cannot finish until you click. So PreToolUse drops a marker,
+        // PostToolUse removes it, and the flash waits before looking: marker gone
+        // means the tool ran, marker still there means something is waiting on you.
+        //
+        // The wait happens in the detached child, so the hook itself still returns
+        // immediately and never delays Claude.
+
+        /// <summary>
+        /// Timing trace, on only while %LOCALAPPDATA%\ClaudeFlash\trace exists. Used to
+        /// measure how long PostToolUse really takes to arrive relative to the wait.
+        /// </summary>
+        private static void Trace(string line)
+        {
+            try
+            {
+                string flag = Path.Combine(DataDir(), "trace");
+                if (!File.Exists(flag)) return;
+                File.AppendAllText(Path.Combine(DataDir(), "timing.log"),
+                    DateTime.Now.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture) + "  " + line + Environment.NewLine);
+            }
+            catch { }
+        }
+
+        private static string PendingDir()
+        {
+            string dir = Path.Combine(DataDir(), "pending");
+            try { Directory.CreateDirectory(dir); }
+            catch { }
+            return dir;
+        }
+
+        private static string MarkerPath(string id)
+        {
+            var clean = new StringBuilder();
+            foreach (char c in id)
+                if (char.IsLetterOrDigit(c) || c == '_' || c == '-') clean.Append(c);
+            if (clean.Length == 0) return null;
+            return Path.Combine(PendingDir(), clean.ToString());
+        }
+
+        /// <summary>PostToolUse: the tool finished, so nothing is waiting on the user.</summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void Relaunch(string[] argv)
+        private static int MarkDone(bool debug)
+        {
+            string id = JsonString(ReadPayload(debug), "tool_use_id");
+            if (!string.IsNullOrEmpty(id))
+            {
+                string path = MarkerPath(id);
+                Trace("PostToolUse mark id=" + id + " markerExisted=" + (path != null && File.Exists(path)));
+                try { if (path != null) File.Delete(path); }
+                catch { }
+            }
+            SweepStaleMarkers();
+            return 0;
+        }
+
+        private static void SweepStaleMarkers()
+        {
+            try
+            {
+                DateTime cutoff = DateTime.UtcNow.AddMinutes(-5);
+                foreach (string f in Directory.GetFiles(PendingDir()))
+                    if (File.GetCreationTimeUtc(f) < cutoff) { try { File.Delete(f); } catch { } }
+            }
+            catch { }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void Relaunch(string[] argv, string extraArg)
         {
             var passthrough = new List<string>();
+            if (!string.IsNullOrEmpty(extraArg)) passthrough.Add(extraArg);
             foreach (string a in argv)
             {
-                if (a != null && a.Trim().TrimStart('-', '/').Equals("bg", StringComparison.OrdinalIgnoreCase)) continue;
+                if (a == null) continue;
+                string key = a.Trim().TrimStart('-', '/');
+                int eq = key.IndexOf('=');
+                if (eq > 0) key = key.Substring(0, eq);
+
+                if (key.Equals("bg", StringComparison.OrdinalIgnoreCase)) continue;
+
+                // The mode gate is the parent's job - only the parent has the hook payload
+                // on stdin. Passing it on would re-run the check in a process with no
+                // console, where Console.IsInputRedirected is true but stdin is empty, so
+                // the child would read "" and silently suppress itself.
+                if (key.Equals("require_mode", StringComparison.OrdinalIgnoreCase) ||
+                    key.Equals("require-mode", StringComparison.OrdinalIgnoreCase)) continue;
+
                 passthrough.Add(Quote(a));
             }
 
@@ -401,7 +587,7 @@ namespace ClaudeFlash
                 psi.WorkingDirectory = Path.GetDirectoryName(self);
                 Process.Start(psi);
             }
-            catch { /* a missed flash is never worth an error dialog */ }
+            catch (Exception ex) { LogError(ex); /* never worth an error dialog, but do not hide it */ }
         }
 
         private static string Quote(string s)
@@ -472,6 +658,40 @@ namespace ClaudeFlash
         }
 
         private static string DisabledMarker() { return Path.Combine(DataDir(), "disabled"); }
+
+        /// <summary>
+        /// Reads one key straight out of config.ini. Deliberately does not go through
+        /// Settings, which parses colours and would drag System.Drawing into the hot
+        /// --bg path for the sake of a single string.
+        /// </summary>
+        private static string ConfigValue(string key)
+        {
+            try
+            {
+                string path = Settings.ConfigPath();
+                if (!File.Exists(path)) return null;
+                foreach (string line in File.ReadAllLines(path))
+                {
+                    string t = line.Trim();
+                    if (t.Length == 0 || t[0] == '#' || t[0] == ';') continue;
+                    int eq = t.IndexOf('=');
+                    if (eq <= 0) continue;
+                    if (string.Equals(t.Substring(0, eq).Trim(), key, StringComparison.OrdinalIgnoreCase))
+                        return t.Substring(eq + 1).Trim();
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private static bool IsOff(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return false;
+            return value.Equals("off", StringComparison.OrdinalIgnoreCase) ||
+                   value.Equals("false", StringComparison.OrdinalIgnoreCase) ||
+                   value.Equals("no", StringComparison.OrdinalIgnoreCase) ||
+                   value == "0";
+        }
 
         internal static bool IsEnabled()
         {
@@ -589,8 +809,10 @@ namespace ClaudeFlash
         public double Vignette = 0.32;
         public Color ColorDone = ColorTranslator.FromHtml("#00FF5A");
         public Color ColorAsk = ColorTranslator.FromHtml("#08A9FF");
-        public Color ColorPerm = ColorTranslator.FromHtml("#A855F7");
-        public double AlphaPerm = 0.17;
+        // Deeper and more saturated than a typical violet on purpose: #A855F7 has such a
+        // high blue channel that at low opacity it washes out and reads as the ask blue.
+        public Color ColorPerm = ColorTranslator.FromHtml("#8B2FCE");
+        public double AlphaPerm = 0.20;
         public string SkipIfFocused = "";
 
         private const string Template =
@@ -623,9 +845,24 @@ namespace ClaudeFlash
             "color_done=#00FF5A\r\n" +
             "color_ask=#08A9FF\r\n" +
             "\r\n" +
-            "# Shown when Claude asks permission to run something.\r\n" +
-            "color_perm=#A855F7\r\n" +
-            "alpha_perm=0.17\r\n" +
+            "# Shown when Claude is blocked waiting for you to approve something.\r\n" +
+            "color_perm=#8B2FCE\r\n" +
+            "alpha_perm=0.20\r\n" +
+            "\r\n" +
+            "# Turn the purple permission flash on or off. Takes effect immediately - no\r\n" +
+            "# reinstall, no Claude restart. Green and blue are unaffected.\r\n" +
+            "perm_flash=on\r\n" +
+            "\r\n" +
+            "# Permission modes the purple flash may fire in. acceptEdits is included on\r\n" +
+            "# purpose: it auto-accepts file edits but still asks before running commands.\r\n" +
+            "# auto, dontAsk and bypassPermissions never ask, so they are left out.\r\n" +
+            "perm_modes=default,plan,acceptEdits\r\n" +
+            "\r\n" +
+            "# How long a tool call may run before an unfinished one is treated as waiting\r\n" +
+            "# on you. There is no 'tool started' event to key off, so this is a guess:\r\n" +
+            "# PostToolUse alone costs ~800ms, and any approved call slower than this will\r\n" +
+            "# flash purple anyway. Raise it if long commands keep setting it off.\r\n" +
+            "prompt_wait_ms=3000\r\n" +
             "\r\n" +
             "# Comma-separated process names. If one of them owns the focused window when\r\n" +
             "# the flash fires, it is skipped - you were already looking at it.\r\n" +

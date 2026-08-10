@@ -174,9 +174,22 @@ if (-not $NoHooks) {
         # signal is "a tool is about to run". In manual approval mode that is exactly
         # when you get prompted; with tools pre-approved it fires without a prompt too.
         # AskUserQuestion is deliberately excluded so it keeps its own colour.
-        $tools = 'Bash|PowerShell|Write|Edit|NotebookEdit|WebFetch|WebSearch|Task|Agent'
-        Set-FlashHook $settings.hooks 'PreToolUse' ('"{0}" perm --bg --require_mode=default,plan' -f $exe) $tools
-        Step "Permission flash on -> violet, only in modes that actually ask"
+        # One entry per tool with an exact matcher, rather than a single
+        # "Bash|Write|..." alternation. AskUserQuestion matches as an exact name and
+        # works; an alternation never fired, which is what a literal string compare
+        # would do. Exact names match either way, so this stops depending on it.
+        $tools = 'Bash', 'PowerShell', 'Write', 'Edit', 'NotebookEdit', 'WebFetch',
+                 'WebSearch', 'Task', 'Agent', 'Read', 'Glob', 'Grep', 'Artifact', 'Workflow'
+        $dbg = if ($Diagnose) { ' --debug_payload' } else { '' }
+        foreach ($tool in $tools) {
+            # PreToolUse arms it; PostToolUse disarms it if the tool finishes on its own.
+            # Only a call that is still unfinished after the wait was actually blocked on
+            # you, so an already-approved call never flashes.
+            Set-FlashHook $settings.hooks 'PreToolUse' `
+                ('"{0}" perm --bg --require_mode --wait_prompt{1}' -f $exe, $dbg) $tool
+            Set-FlashHook $settings.hooks 'PostToolUse' ('"{0}" mark{1}' -f $exe, $dbg) $tool
+        }
+        Step "Permission flash on -> purple. Tune with: flash set prompt_wait_ms <ms>"
     }
 
     if ($Diagnose) {
