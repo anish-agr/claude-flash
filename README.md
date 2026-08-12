@@ -137,6 +137,7 @@ use `flash set <key> <value>`.
 | `color_perm` | `#8B2FCE` | "Waiting for approval" colour |
 | `perm_flash` | `on` | Turn the purple flash on/off without reinstalling |
 | `perm_modes` | `default,plan,acceptEdits` | Permission modes purple may fire in |
+| `only_your_sessions` | `on` | Only flash for sessions you typed into, not spawned agents |
 | `prompt_wait_ms` | `3000` | How long a call may run before an unfinished one counts as waiting on you |
 | `fade_in_ms` | `70` | Fade-in time |
 | `hold_ms` | `420` | Time at full opacity |
@@ -258,6 +259,24 @@ Or switch purple off and keep the two exact signals:
 ```bash
 flash set perm_flash off
 ```
+
+### Why it ignores background agents
+
+Hooks live in `~/.claude/settings.json`, which is global to every Claude Code
+session. A single prompt can spawn background agents, and each one is its own
+session that fires its own `Stop` when it finishes — so the screen flashes green
+repeatedly while the prompt you are actually waiting on is still running.
+
+Sessions you typed into receive `UserPromptSubmit`; spawned agents never do. A
+`UserPromptSubmit` hook records those ids, and the flash checks against them
+before firing. Turn it off with:
+
+```bash
+flash set only_your_sessions off
+```
+
+It fails open — if no session has been recorded yet, flashes still fire, since
+silence would be worse than an extra flash.
 
 ### Two gotchas worth knowing
 

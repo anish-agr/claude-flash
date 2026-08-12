@@ -122,6 +122,7 @@ namespace ClaudeFlash
             bool debug = overrides.ContainsKey("debug_payload");
 
             if (command == "mark") return MarkDone(debug);
+            if (command == "seen") return MarkSessionSeen(debug);
 
             // Present with no value means "take the list from config", so the modes can
             // be changed without reinstalling the hooks.
@@ -147,6 +148,28 @@ namespace ClaudeFlash
 
             if (background)
             {
+                // Which session asked for this. Hooks are global to ~/.claude/settings.json,
+                // so every running Claude Code window fires them - handy for telling an
+                // unexpected flash from another session apart from a real bug.
+                // Skip sessions you never typed into - those are spawned agents, and
+                // their Stop events are not something you are waiting on.
+                if (overrides.ContainsKey("require_session") && !IsOff(ConfigValue("only_your_sessions")))
+                {
+                    string p = ReadPayload(debug);
+                    if (!IsYourSession(p))
+                    {
+                        Trace("skip " + command + " session=" + (JsonString(p, "session_id") ?? "?") + " (not yours)");
+                        return 0;
+                    }
+                }
+
+                if (IsTracing())
+                {
+                    string p = ReadPayload(false);
+                    Trace("fire " + command + " session=" + (JsonString(p, "session_id") ?? "?") +
+                          " event=" + (JsonString(p, "hook_event_name") ?? "?"));
+                }
+
                 string extra = null;
                 if (waitForPrompt)
                 {
@@ -272,7 +295,7 @@ namespace ClaudeFlash
             "alpha", "alpha_ask", "alpha_perm", "fade_in_ms", "hold_ms", "fade_out_ms",
             "dismiss_fade_ms", "min_visible_ms", "vignette",
             "color_done", "color_ask", "color_perm",
-            "perm_flash", "perm_modes", "prompt_wait_ms", "skip_if_focused"
+            "perm_flash", "perm_modes", "prompt_wait_ms", "only_your_sessions", "skip_if_focused"
         };
 
         /// <summary>
@@ -320,7 +343,8 @@ namespace ClaudeFlash
                     return 1;
                 }
             }
-            else if (key.Equals("perm_flash", StringComparison.Ordinal))
+            else if (key.Equals("perm_flash", StringComparison.Ordinal) ||
+                     key.Equals("only_your_sessions", StringComparison.Ordinal))
             {
                 bool on = val.Equals("on", StringComparison.OrdinalIgnoreCase) ||
                           val.Equals("true", StringComparison.OrdinalIgnoreCase) ||
@@ -494,16 +518,88 @@ namespace ClaudeFlash
         /// Timing trace, on only while %LOCALAPPDATA%\ClaudeFlash\trace exists. Used to
         /// measure how long PostToolUse really takes to arrive relative to the wait.
         /// </summary>
+        private static bool IsTracing()
+        {
+            try { return File.Exists(Path.Combine(DataDir(), "trace")); }
+            catch { return false; }
+        }
+
         private static void Trace(string line)
         {
             try
             {
-                string flag = Path.Combine(DataDir(), "trace");
-                if (!File.Exists(flag)) return;
+                if (!IsTracing()) return;
                 File.AppendAllText(Path.Combine(DataDir(), "timing.log"),
                     DateTime.Now.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture) + "  " + line + Environment.NewLine);
             }
             catch { }
+        }
+
+        // ---- whose session is this? -------------------------------------------
+        //
+        // Hooks are global to ~/.claude/settings.json, so every session fires them -
+        // including the background agents a single prompt spawns. Each of those ends
+        // with its own Stop, which looks like the screen flashing green at random
+        // while the prompt you are actually waiting on is still going.
+        //
+        // A session you typed into gets UserPromptSubmit; a spawned agent never does.
+        // Recording those ids is enough to tell the two apart.
+
+        private static string SessionsDir()
+        {
+            string dir = Path.Combine(DataDir(), "sessions");
+            try { Directory.CreateDirectory(dir); }
+            catch { }
+            return dir;
+        }
+
+        private static string SessionFile(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            var clean = new StringBuilder();
+            foreach (char c in id)
+                if (char.IsLetterOrDigit(c) || c == '_' || c == '-') clean.Append(c);
+            if (clean.Length == 0) return null;
+            return Path.Combine(SessionsDir(), clean.ToString());
+        }
+
+        /// <summary>UserPromptSubmit: you typed here, so this session is yours.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int MarkSessionSeen(bool debug)
+        {
+            string id = JsonString(ReadPayload(debug), "session_id");
+            string path = SessionFile(id);
+            if (path != null)
+            {
+                try { File.WriteAllText(path, DateTime.UtcNow.Ticks.ToString(CultureInfo.InvariantCulture)); }
+                catch { }
+            }
+            try
+            {
+                DateTime cutoff = DateTime.UtcNow.AddDays(-7);
+                foreach (string f in Directory.GetFiles(SessionsDir()))
+                    if (File.GetLastWriteTimeUtc(f) < cutoff) { try { File.Delete(f); } catch { } }
+            }
+            catch { }
+            return 0;
+        }
+
+        /// <summary>
+        /// True if this session is one you typed into. Fails open: if nothing has ever
+        /// been recorded the feature is not set up yet, and staying silent forever
+        /// would be worse than an occasional extra flash.
+        /// </summary>
+        private static bool IsYourSession(string payload)
+        {
+            try
+            {
+                string[] known = Directory.GetFiles(SessionsDir());
+                if (known.Length == 0) return true;
+            }
+            catch { return true; }
+
+            string path = SessionFile(JsonString(payload, "session_id"));
+            return path != null && File.Exists(path);
         }
 
         private static string PendingDir()
@@ -857,6 +953,11 @@ namespace ClaudeFlash
             "# purpose: it auto-accepts file edits but still asks before running commands.\r\n" +
             "# auto, dontAsk and bypassPermissions never ask, so they are left out.\r\n" +
             "perm_modes=default,plan,acceptEdits\r\n" +
+            "\r\n" +
+            "# Only flash for sessions you actually typed into. A single prompt can spawn\r\n" +
+            "# background agents, each its own session ending in its own Stop, which looks\r\n" +
+            "# like the screen flashing at random while your prompt is still running.\r\n" +
+            "only_your_sessions=on\r\n" +
             "\r\n" +
             "# How long a tool call may run before an unfinished one is treated as waiting\r\n" +
             "# on you. There is no 'tool started' event to key off, so this is a guess:\r\n" +

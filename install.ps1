@@ -121,7 +121,10 @@ if (-not $NoHooks) {
         else { $hooks | Add-Member -NotePropertyName $Event -NotePropertyValue $value }
     }
 
-    Set-FlashHook $settings.hooks 'Stop' ('"{0}" done --bg' -f $exe)
+    Set-FlashHook $settings.hooks 'Stop' ('"{0}" done --bg --require_session' -f $exe)
+
+    # Records which sessions are really yours; spawned agents never submit a prompt.
+    Set-FlashHook $settings.hooks 'UserPromptSubmit' ('"{0}" seen' -f $exe)
 
     # One entry per notification type rather than a single wildcard. A bare "*" and an
     # absent matcher both failed to fire; an exact type matches whether the matcher is
@@ -167,7 +170,7 @@ if (-not $NoHooks) {
     # Notification turned out not to fire at all in the desktop app, so amber also
     # rides on the tool call Claude makes when it asks you something. This is the
     # trigger that actually works.
-    Set-FlashHook $settings.hooks 'PreToolUse' ('"{0}" ask --bg' -f $exe) 'AskUserQuestion'
+    Set-FlashHook $settings.hooks 'PreToolUse' ('"{0}" ask --bg --require_session' -f $exe) 'AskUserQuestion'
 
     if ($PermissionFlash) {
         # Notification/permission_prompt never fires here, so the closest available
@@ -186,7 +189,7 @@ if (-not $NoHooks) {
             # Only a call that is still unfinished after the wait was actually blocked on
             # you, so an already-approved call never flashes.
             Set-FlashHook $settings.hooks 'PreToolUse' `
-                ('"{0}" perm --bg --require_mode --wait_prompt{1}' -f $exe, $dbg) $tool
+                ('"{0}" perm --bg --require_mode --wait_prompt --require_session{1}' -f $exe, $dbg) $tool
             Set-FlashHook $settings.hooks 'PostToolUse' ('"{0}" mark{1}' -f $exe, $dbg) $tool
         }
         Step "Permission flash on -> purple. Tune with: flash set prompt_wait_ms <ms>"
