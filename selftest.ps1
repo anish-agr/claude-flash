@@ -172,6 +172,24 @@ Start-Process $exe -ArgumentList 'on' -Wait
 Wait-Idle
 Check "re-enabled flashes again" (Invoke-Hook ('"' + $exe + '" done --bg') 'default')
 
+# ---- 4a. nothing draws while off --------------------------------------------
+# Start() gates the hook path, but Run is reachable from confirmations and `reset`
+# too, and those used to draw whatever the switch said.
+Write-Host "`nEvery route is silent while off" -ForegroundColor White
+Start-Process $exe -ArgumentList 'off' -Wait
+Wait-Idle
+foreach ($route in @(
+        @('done', '--bg'), @('ask', '--bg'), @('perm', '--bg'),
+        @('green'), @('reset'), @('set', 'hold_ms', '420'))) {
+    $script:stampBefore = Get-FlashStamp
+    Start-Process $exe -ArgumentList $route -Wait
+    Start-Sleep -Milliseconds 700
+    Wait-Idle
+    Check ("silent while off: flash " + ($route -join ' ')) ((Get-FlashStamp) -eq $script:stampBefore)
+}
+Start-Process $exe -ArgumentList 'on' -Wait
+Wait-Idle
+
 # ---- 4b. the kill switch under load -----------------------------------------
 # A script spawning sessions back to back fires many hooks at once. File.Exists
 # reports every failure as "missing", so a contended read was enough to read "off"

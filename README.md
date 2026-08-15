@@ -354,7 +354,10 @@ everywhere; only the overlay needs rewriting.
 - A new flash cancels one still fading, so the colour always reflects the latest event.
 - Message boxes only appear for commands you type (`set`, `status`, `help`). Hook-driven flashes are always silent.
 - If it ever fails, it writes `%LOCALAPPDATA%\ClaudeFlash\error.log` rather than dying silently.
-- Set `%LOCALAPPDATA%\ClaudeFlash\trace` to any content to log hook timings to `timing.log`; delete it to stop.
+- Create `%LOCALAPPDATA%\ClaudeFlash\trace` (any content) to log every invocation to
+  `timing.log`; delete it to stop. Each line is written *before* any gate, so an empty
+  log proves nothing ran, rather than leaving "never invoked" and "invoked but
+  suppressed" indistinguishable.
 
 ## License
 

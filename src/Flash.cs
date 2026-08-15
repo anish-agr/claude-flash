@@ -109,6 +109,12 @@ namespace ClaudeFlash
             if (positional.Count > 0) mode = positional[0];
 
             string command = mode.ToLowerInvariant();
+
+            // Logged before any gate, so "nothing in the log" means it genuinely never
+            // ran rather than "ran and was suppressed". Without this the two are
+            // indistinguishable, which is exactly what made an off switch that appeared
+            // to do nothing impossible to diagnose.
+            Trace("invoked: " + string.Join(" ", argv) + "  enabled=" + IsEnabled());
             if (command == "help" || command == "?" || command == "status" ||
                 command == "on" || command == "off" || command == "toggle" ||
                 command == "set" || command == "config" || command == "reset")
@@ -403,10 +409,29 @@ namespace ClaudeFlash
 
         private static void Confirm(bool enabled, Settings settings)
         {
-            Run(enabled ? settings.ColorDone : ParseColor("red", Color.Red), settings);
+            // force: the "now off" confirmation has to show even though flashing is off.
+            Run(enabled ? settings.ColorDone : ParseColor("red", Color.Red), settings, true);
+        }
+
+        /// <summary>
+        /// Last line of defence. Start() gates the hook path, but Run is also reachable
+        /// from confirmations and `reset`, and any future caller would inherit the same
+        /// hole. Checking here means no code path can draw while switched off, whatever
+        /// route it took to get here. `force` is only for the on/off confirmation itself,
+        /// which has to be visible precisely when flashing is disabled.
+        /// </summary>
+        private static void Run(Color color, Settings settings, bool force)
+        {
+            if (!force && !IsEnabled()) return;
+            RunCore(color, settings);
         }
 
         private static void Run(Color color, Settings settings)
+        {
+            Run(color, settings, false);
+        }
+
+        private static void RunCore(Color color, Settings settings)
         {
             // Records that an overlay really rendered. Watching for a "flash.exe" process
             // is not the same thing - the short-lived --bg parent has that name too, and
