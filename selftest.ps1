@@ -10,6 +10,7 @@
 param()
 
 $exe = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\flash.exe'
+$script:exePath = $exe
 $settingsPath = Join-Path $env:USERPROFILE '.claude\settings.json'
 $pass = 0; $fail = 0
 
@@ -35,10 +36,18 @@ function Wait-Flash([int]$ms) {
     return $false
 }
 
+# Hooks gated with --require_session only fire for sessions you actually typed into,
+# so the harness has to register its fake session the way UserPromptSubmit would.
+function Register-Session([string]$id) {
+    ('{"session_id":"' + $id + '","hook_event_name":"UserPromptSubmit"}') |
+        cmd.exe /c ('"' + $script:exePath + '" seen') | Out-Null
+}
+
 # Runs the hook the way Claude Code does and reports whether a flash appeared.
 $script:hookSeq = 0
 function Invoke-Hook([string]$command, [string]$mode) {
     Wait-Idle
+    Register-Session 'selftest'
     # A unique tool_use_id per call, and no matching PostToolUse, so a hook using
     # --wait_prompt sees an unfinished call and flashes. The window has to exceed
     # that wait, hence 3s rather than 1.5s.
@@ -58,7 +67,12 @@ Write-Host ("-" * 58) -ForegroundColor DarkGray
 # ---- 1. binary -------------------------------------------------------------
 Write-Host "`nBinary" -ForegroundColor White
 Check "flash.exe installed" (Test-Path $exe) $exe
-Check "resolves as a bare command" ([bool](cmd.exe /c "where flash 2>nul"))
+# A shell can be missing WindowsApps from its own inherited PATH while the user PATH
+# still has it, so fall back to checking the real registrations.
+$wa = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'
+$onUserPath = (([Environment]::GetEnvironmentVariable('Path', 'User')) -split ';') -contains $wa
+$appPaths = Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\flash.exe'
+Check "resolves as a bare command" ([bool](cmd.exe /c "where flash 2>nul") -or ($onUserPath -and $appPaths))
 
 $bytes = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($exe))
 Check "no SetWindowsHookEx in binary" (-not ($bytes -match 'SetWindowsHookEx'))
@@ -132,7 +146,8 @@ if ($permHook) {
     }
     function Invoke-Pair([string]$id, [bool]$complete) {
         Clear-Pending; Wait-Idle
-        $pre = '{"permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"' + $id + '"}'
+        Register-Session 'selftest'
+        $pre = '{"session_id":"selftest","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"' + $id + '"}'
         $script:stampBefore = Get-FlashStamp
         $pre | cmd.exe /c $permHook | Out-Null
         if ($complete -and $markHook) {
@@ -156,6 +171,27 @@ Check "disabled suppresses flashes" (-not (Invoke-Hook ('"' + $exe + '" done --b
 Start-Process $exe -ArgumentList 'on' -Wait
 Wait-Idle
 Check "re-enabled flashes again" (Invoke-Hook ('"' + $exe + '" done --bg') 'default')
+
+# ---- 4b. the kill switch under load -----------------------------------------
+# A script spawning sessions back to back fires many hooks at once. File.Exists
+# reports every failure as "missing", so a contended read was enough to read "off"
+# as "on" and flash anyway - which made the switch look like it did nothing.
+Write-Host "`nKill switch under concurrency" -ForegroundColor White
+Start-Process $exe -ArgumentList 'off' -Wait
+Wait-Idle
+$script:stampBefore = Get-FlashStamp
+$stressJobs = 1..20 | ForEach-Object {
+    Start-Job -ScriptBlock {
+        param($e)
+        '{"session_id":"selftest","hook_event_name":"Stop"}' | cmd.exe /c ('"' + $e + '" done --bg') | Out-Null
+    } -ArgumentList $exe
+}
+$stressJobs | Wait-Job -Timeout 90 | Out-Null
+$stressJobs | Remove-Job -Force
+Start-Sleep -Milliseconds 1500
+Check "20 concurrent hooks stay silent while off" ((Get-FlashStamp) -eq $script:stampBefore)
+Start-Process $exe -ArgumentList 'on' -Wait
+Wait-Idle
 
 # ---- 5. no crashes ----------------------------------------------------------
 Write-Host "`nHealth" -ForegroundColor White

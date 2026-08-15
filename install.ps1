@@ -56,10 +56,17 @@ Ok "'flash' available in Win+R, cmd and PowerShell"
 if (-not $NoShortcuts) {
     $desktop = [Environment]::GetFolderPath('Desktop')
     $shell = New-Object -ComObject WScript.Shell
+    # Two explicit shortcuts rather than one toggle. A toggle confirms "now on" with a
+    # green flash, which looks exactly like an ordinary done flash - so clicking it to
+    # turn things off and seeing green reads as "it didn't work" when it in fact turned
+    # it back on. Separate ON and OFF buttons cannot be misread.
     $shortcuts = @(
-        @{ Name = 'Claude Flash (test).lnk'; Args = 'done';   Desc = 'Fire a test flash' },
-        @{ Name = 'Claude Flash on-off.lnk'; Args = 'toggle'; Desc = 'Turn ClaudeFlash on or off (green = on, red = off)' }
+        @{ Name = 'Claude Flash (test).lnk'; Args = 'done'; Desc = 'Fire a test flash' },
+        @{ Name = 'Claude Flash OFF.lnk';    Args = 'off';  Desc = 'Turn ClaudeFlash off (red confirm)' },
+        @{ Name = 'Claude Flash ON.lnk';     Args = 'on';   Desc = 'Turn ClaudeFlash on (green confirm)' }
     )
+    $stale = Join-Path $desktop 'Claude Flash on-off.lnk'
+    if (Test-Path $stale) { Remove-Item $stale -Force }
     foreach ($s in $shortcuts) {
         $lnk = $shell.CreateShortcut((Join-Path $desktop $s.Name))
         $lnk.TargetPath = $exe

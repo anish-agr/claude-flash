@@ -114,15 +114,14 @@ namespace ClaudeFlash
                 command == "set" || command == "config" || command == "reset")
                 return HandleCommand(command, overrides, positional);
 
-            if (!IsEnabled()) return 0;
-
-            // --require_mode=default,plan : only flash if Claude is in a permission mode
-            // that actually stops and asks. Checked before the relaunch so a suppressed
-            // flash costs one short-lived process and nothing on screen.
             bool debug = overrides.ContainsKey("debug_payload");
 
+            // Bookkeeping runs even when flashing is off. These draw nothing, and skipping
+            // them would leave stale pending markers to fire spuriously once re-enabled.
             if (command == "mark") return MarkDone(debug);
             if (command == "seen") return MarkSessionSeen(debug);
+
+            if (!IsEnabled()) return 0;
 
             // Present with no value means "take the list from config", so the modes can
             // be changed without reinstalling the hooks.
@@ -789,10 +788,27 @@ namespace ClaudeFlash
                    value == "0";
         }
 
+        /// <summary>
+        /// Fails CLOSED on purpose. File.Exists returns false for every failure - sharing
+        /// violation, transient IO, permissions - not just "missing". With a script
+        /// spawning sessions back to back, dozens of these run at once against the same
+        /// directory, and one unlucky read used to be enough to treat "off" as "on" and
+        /// fire anyway. A flash you cannot switch off is far worse than a missed one, so
+        /// anything short of a confident "no marker" means stay quiet.
+        /// </summary>
         internal static bool IsEnabled()
         {
-            try { return !File.Exists(DisabledMarker()); }
-            catch { return true; }
+            try
+            {
+                string dir = DataDir();
+                if (!Directory.Exists(dir)) return true;         // nothing set up yet
+                if (File.Exists(Path.Combine(dir, "disabled"))) return false;
+
+                // Second opinion, since File.Exists cannot distinguish "absent" from
+                // "could not tell".
+                return Directory.GetFiles(dir, "disabled").Length == 0;
+            }
+            catch { return false; }
         }
 
         private static void SetEnabled(bool enabled)
@@ -800,8 +816,15 @@ namespace ClaudeFlash
             try
             {
                 if (enabled) File.Delete(DisabledMarker());
-                else File.WriteAllText(DisabledMarker(),
-                    "ClaudeFlash is off. Delete this file, or run: flash on" + Environment.NewLine);
+                else
+                {
+                    File.WriteAllText(DisabledMarker(),
+                        "ClaudeFlash is off. Delete this file, or run: flash on" + Environment.NewLine);
+                    // Children already spawned have passed their own enabled check, and a
+                    // purple one may be part way through its wait. Without this, turning it
+                    // off still lets a few more flashes through.
+                    KillOtherInstances();
+                }
             }
             catch { }
         }
