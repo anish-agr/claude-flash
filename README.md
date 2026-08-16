@@ -122,8 +122,26 @@ flag for experimenting before you commit to it:
 flash perm --alpha=0.4 --hold_ms=900
 ```
 
-## Settings
+### Turning it off properly for scripted runs
 
+`flash off` stops the overlay drawing, but the hooks still fire and still launch a
+process per event. If something is spawning sessions in a loop - data collection,
+benchmarking - that is a lot of churn for nothing, and it makes any oddity hard to
+attribute. Remove the hooks instead:
+
+```bash
+powershell -ExecutionPolicy Bypass -File hooks.ps1 -Off
+```
+
+```bash
+powershell -ExecutionPolicy Bypass -File hooks.ps1 -On
+```
+
+Hooks are read once at session start, so this applies to sessions started after
+it - exactly the case when a script keeps making new ones. Run `hooks.ps1` with
+no arguments to see which state you are in.
+
+## Settings
 `%LOCALAPPDATA%\ClaudeFlash\config.ini`, created on first run. Edit directly, or
 use `flash set <key> <value>`.
 
