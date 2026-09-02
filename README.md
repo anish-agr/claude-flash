@@ -1,78 +1,73 @@
 # ClaudeFlash
 
-Washes your whole screen in colour for about a second when Claude Code wants
-you. Look away, get on with something else, and let peripheral vision tell you
-when to come back.
+Tints the whole screen for about a second when Claude Code needs attention, so a
+completed response or a pending prompt is visible without watching the terminal.
 
-**Windows only.** The overlay is built on Win32 — `UpdateLayeredWindow`,
-`WS_EX_TRANSPARENT`, `GetAsyncKeyState` — and the installer uses PowerShell and
-the registry. See [Other platforms](#other-platforms).
+Windows only. The overlay uses Win32 (`UpdateLayeredWindow`, `WS_EX_TRANSPARENT`,
+`GetAsyncKeyState`) and the installer uses PowerShell and the registry. See
+[Other platforms](#other-platforms).
 
-| Colour | Means | Fires on |
+| Colour | Meaning | Trigger |
 |---|---|---|
-| **Green** `#00FF5A` | Claude finished responding | `Stop` |
-| **Blue** `#08A9FF` | Claude has a question for you | `PreToolUse` / `AskUserQuestion` |
-| **Purple** `#8B2FCE` | Claude is waiting for you to approve something | `PreToolUse` + `PostToolUse` |
+| Green `#00FF5A` | Response finished | `Stop` |
+| Blue `#08A9FF` | Claude asked a question | `PreToolUse` / `AskUserQuestion` |
+| Purple `#8B2FCE` | Waiting for approval | `PreToolUse` + `PostToolUse` |
 
-The overlay is click-through and never takes focus, so it can't eat a keystroke
-or a click. Any mouse button or key makes it vanish immediately.
+The overlay is click-through and never takes focus, so it cannot consume a
+keystroke or a click. Any mouse button or key dismisses it.
 
 ## Install
 
-Double-click **`setup.cmd`**, or:
+Run `setup.cmd`, or:
 
 ```bash
 powershell -ExecutionPolicy Bypass -File install.ps1 -PermissionFlash
 ```
 
-Drop `-PermissionFlash` if you only want green and blue. Everything else is
-tunable afterwards without reinstalling.
+Omit `-PermissionFlash` for green and blue only. Everything else is configurable
+afterwards without reinstalling.
 
-That builds `bin\flash.exe`, copies it to
-`%LOCALAPPDATA%\Microsoft\WindowsApps\flash.exe`, drops two desktop shortcuts,
-and adds the Claude Code hooks. **Restart Claude Code afterwards** — hooks are
-read once when a session starts.
+The installer compiles `bin\flash.exe`, copies it to
+`%LOCALAPPDATA%\Microsoft\WindowsApps\flash.exe`, creates a desktop toggle, and
+adds hooks to `~/.claude/settings.json`. Restart Claude Code afterwards; hooks
+are read once per session at startup.
 
-Nothing to install first: it compiles with the C# compiler that already ships
-with Windows.
+No prerequisites: it compiles with the C# compiler included with Windows.
 
-`WindowsApps` is on the user PATH by default on Windows 10/11, so `flash` works
-as a bare command from `Win+R`, `cmd` and PowerShell straight away — including
-terminals that are already open, which editing PATH could not do.
+`WindowsApps` is on the user PATH by default on Windows 10/11, so `flash` resolves
+from `Win+R`, `cmd` and PowerShell, including already-open terminals. Hooks,
+shortcut and the `Win+R` registration all reference that copy.
 
-If you edit the source, re-run `install.ps1` — that's what refreshes the
-installed copy.
+After editing the source, re-run `install.ps1` to refresh the installed binary.
 
 ## Commands
 
-Run these from `Win+R`, `cmd`, PowerShell, or the desktop shortcuts.
+Available from `Win+R`, `cmd`, PowerShell, or the desktop shortcut.
 
 ```
 flash                       green flash
 flash done                  green flash
 flash ask                   blue flash
 flash perm                  purple flash
-flash <colour>              any colour, see below
+flash <colour>              named colour or #RRGGBB
 
-flash set <key> <value>     change a setting permanently
-flash config                open config.ini in your editor
-flash reset                 restore all defaults
-flash status                current state, config path, whether hooks are live
+flash set <key> <value>     change a setting
+flash config                open config.ini
+flash reset                 restore defaults
+flash status                current state, config path, hook status
 
-flash off                   disable everything (hooks stay, they just do nothing)
-flash on                    enable
-flash toggle                flip — green confirm = on, red confirm = off
+flash on | off | toggle     enable or disable all flashes
 flash help                  full usage
 ```
 
 Colour names: `green` `amber` `red` `blue` `violet` `lavender` `indigo` `teal`
 `pink` `purple` `cyan` `white`, or any `#RRGGBB`.
 
-### Changing colours
+### Colours
 
-`flash set` validates the value, writes one line of `config.ini` leaving the
-comments intact, and confirms by flashing the colour you just set. **Applies
-immediately — no reinstall, no restart.**
+`flash set` validates the value, rewrites one line of `config.ini` leaving
+comments intact, and confirms with a flash in the colour set. Changes apply to
+the next flash; no reinstall or restart.
 
 ```bash
 flash set color_perm "#C13FFF"
@@ -82,13 +77,32 @@ flash set color_perm "#C13FFF"
 flash set color_ask teal
 ```
 
-Bad values are rejected rather than silently ignored — `flash set color_ask
-notacolour` tells you it isn't a colour and changes nothing.
+Invalid values are rejected without modifying the config.
 
-### Turning the purple flash on and off
+### Timing and opacity
 
-Green and blue are exact. Purple is a heuristic (see
-[below](#the-purple-flash-and-its-one-false-positive)), so it has its own switch:
+```bash
+flash set hold_ms 700
+```
+
+```bash
+flash set alpha 0.35
+```
+
+```bash
+flash set prompt_wait_ms 5000
+```
+
+Every key also works as a one-off command-line flag:
+
+```bash
+flash perm --alpha=0.4 --hold_ms=900
+```
+
+### Disabling the purple flash
+
+Green and blue correspond to specific events. Purple is inferred (see
+[Purple flash](#purple-flash)) and has a separate switch:
 
 ```bash
 flash set perm_flash off
@@ -98,36 +112,14 @@ flash set perm_flash off
 flash set perm_flash on
 ```
 
-Immediate, and it leaves green and blue alone. The hooks stay installed either
-way, so flipping it back costs nothing.
+This takes effect immediately and does not affect green or blue. The hooks remain
+installed either way.
 
-### Changing timings
+### Disabling for scripted runs
 
-```bash
-flash set hold_ms 700
-```
-
-```bash
-flash set prompt_wait_ms 5000
-```
-
-```bash
-flash set alpha 0.35
-```
-
-All of these take effect on the next flash. Every key also works as a one-off
-flag for experimenting before you commit to it:
-
-```bash
-flash perm --alpha=0.4 --hold_ms=900
-```
-
-### Turning it off properly for scripted runs
-
-`flash off` stops the overlay drawing, but the hooks still fire and still launch a
-process per event. If something is spawning sessions in a loop - data collection,
-benchmarking - that is a lot of churn for nothing, and it makes any oddity hard to
-attribute. Remove the hooks instead:
+`flash off` stops the overlay from drawing, but the hooks still fire and still
+launch a process per event. When a script creates sessions in a loop, remove the
+hooks instead:
 
 ```bash
 powershell -ExecutionPolicy Bypass -File hooks.ps1 -Off
@@ -137,67 +129,66 @@ powershell -ExecutionPolicy Bypass -File hooks.ps1 -Off
 powershell -ExecutionPolicy Bypass -File hooks.ps1 -On
 ```
 
-Hooks are read once at session start, so this applies to sessions started after
-it - exactly the case when a script keeps making new ones. Run `hooks.ps1` with
-no arguments to see which state you are in.
+Hooks are read at session start, so this applies to sessions created afterwards.
+Running `hooks.ps1` with no arguments reports the current state.
 
 ## Settings
-`%LOCALAPPDATA%\ClaudeFlash\config.ini`, created on first run. Edit directly, or
+
+`%LOCALAPPDATA%\ClaudeFlash\config.ini`, created on first run. Edit directly or
 use `flash set <key> <value>`.
 
-| Key | Default | What it does |
+| Key | Default | Description |
 |---|---|---|
-| `alpha` | `0.28` | Peak opacity, 0–1. Higher = harder to miss |
-| `alpha_ask` | `0.20` | Opacity for the blue flash |
-| `alpha_perm` | `0.20` | Opacity for the purple flash |
-| `color_done` | `#00FF5A` | "Finished" colour |
-| `color_ask` | `#08A9FF` | "Has a question" colour |
-| `color_perm` | `#8B2FCE` | "Waiting for approval" colour |
-| `perm_flash` | `on` | Turn the purple flash on/off without reinstalling |
-| `perm_modes` | `default,plan,acceptEdits` | Permission modes purple may fire in |
-| `only_your_sessions` | `on` | Only flash for sessions you typed into, not spawned agents |
-| `prompt_wait_ms` | `3000` | How long a call may run before an unfinished one counts as waiting on you |
-| `fade_in_ms` | `70` | Fade-in time |
-| `hold_ms` | `420` | Time at full opacity |
-| `fade_out_ms` | `560` | Fade-out time |
-| `dismiss_fade_ms` | `110` | How fast it goes once you click or type |
-| `min_visible_ms` | `120` | Ignore input this early, so a keystroke already in flight can't kill the flash before you see it |
-| `vignette` | `0.32` | 0 = flat tint. Higher = clearer in the middle, so you can still read what's underneath |
-| `skip_if_focused` | *(empty)* | Comma-separated process names. Skip the flash when one of them is already the focused window |
+| `alpha` | `0.28` | Peak opacity, 0–1 |
+| `alpha_ask` | `0.20` | Opacity of the blue flash |
+| `alpha_perm` | `0.20` | Opacity of the purple flash |
+| `color_done` | `#00FF5A` | Response-finished colour |
+| `color_ask` | `#08A9FF` | Question colour |
+| `color_perm` | `#8B2FCE` | Approval-pending colour |
+| `perm_flash` | `on` | Enable the purple flash |
+| `perm_modes` | `default,plan,acceptEdits` | Permission modes in which purple may fire |
+| `only_your_sessions` | `on` | Restrict flashes to sessions you submitted a prompt in |
+| `prompt_wait_ms` | `3000` | How long a call may run before an unfinished one counts as blocked |
+| `fade_in_ms` | `70` | Fade-in duration |
+| `hold_ms` | `420` | Duration at full opacity |
+| `fade_out_ms` | `560` | Fade-out duration |
+| `dismiss_fade_ms` | `110` | Fade-out duration after input |
+| `min_visible_ms` | `120` | Input before this is ignored, so a keystroke already in flight does not dismiss the flash early |
+| `vignette` | `0.32` | 0 is a flat tint; higher keeps the centre clearer than the edges |
+| `skip_if_focused` | *(empty)* | Comma-separated process names; skip the flash if one owns the focused window |
 
-### Picking a colour that reads properly
+### Choosing a colour
 
-Softening a colour by *lightening* it doesn't work. A tint keeps its hue but
-lightness turns into white haze, so pale shades like `#7FD8FF` look like white
-fog at 20% opacity rather than blue. Keep the colour saturated and soften it
-with opacity instead — that's why `alpha_ask` and `alpha_perm` exist separately
-from `alpha`.
+Lightening a colour does not soften it. A translucent tint retains its hue while
+lightness becomes white haze, so a pale value such as `#7FD8FF` reads as white fog
+at 20% opacity rather than blue. Keep the colour saturated and reduce opacity
+instead, which is why `alpha_ask` and `alpha_perm` are separate from `alpha`.
 
-The same trap catches purple: `#A855F7` has such a high blue channel that at low
-opacity it desaturates and reads as the ask blue. `#8B2FCE` is deeper and stays
-purple.
+The same applies to purple: `#A855F7` has a high blue channel and desaturates
+toward the blue used for questions at low opacity. `#8B2FCE` is deeper and stays
+distinguishable.
 
-If the flash is too much during heavy back-and-forth:
+To suppress flashes while the terminal is already focused:
 
 ```bash
 flash set skip_if_focused WindowsTerminal
 ```
 
-## Where it works
+## Compatibility
 
-| | |
+| Environment | Supported |
 |---|---|
-| Claude Code, desktop app | yes — all three colours verified |
-| Claude Code, terminal (CLI) | yes — same `~/.claude/settings.json`, same hooks |
-| Claude Code, VS Code / JetBrains | yes — those run Claude Code underneath |
-| Claude Code on the web | no — runs in the cloud, can't reach your machine |
-| Normal Claude chats (app or browser) | no — no hook system exists for them |
-| Claude Code inside WSL / over SSH | no — hooks run in Linux, where `flash.exe` isn't |
-| Exclusive-fullscreen games | probably not — topmost overlays get suppressed. Borderless fullscreen is fine |
-| `flash` as a plain command | yes — anywhere on this Windows machine |
-| macOS / Linux | no — see [Other platforms](#other-platforms) |
+| Claude Code, desktop app | Yes |
+| Claude Code, terminal (CLI) | Yes — same `~/.claude/settings.json` |
+| Claude Code, VS Code / JetBrains | Yes — these run Claude Code underneath |
+| Claude Code on the web | No — runs remotely |
+| Claude chat (app or browser) | No — no hook system |
+| Claude Code under WSL or SSH | No — hooks run in Linux, where `flash.exe` is unavailable |
+| Exclusive-fullscreen applications | Generally no; topmost overlays are suppressed. Borderless fullscreen works |
+| `flash` as a standalone command | Yes, anywhere on the machine |
+| macOS / Linux | No — see [Other platforms](#other-platforms) |
 
-Anything that can run a command can trigger it, Claude or not:
+Any command can trigger it:
 
 ```bash
 npm run build; flash green
@@ -205,9 +196,9 @@ npm run build; flash green
 
 ## How it works
 
-`install.ps1` writes hooks into `~/.claude/settings.json`, preserving any that
-are already there. `--bg` makes the process relaunch itself detached and return
-in a few milliseconds, so hooks never delay Claude.
+`install.ps1` writes hooks into `~/.claude/settings.json`, preserving existing
+entries. `--bg` makes the process relaunch itself detached and return within a few
+milliseconds, so hooks do not delay Claude Code.
 
 ```json
 {
@@ -223,159 +214,144 @@ in a few milliseconds, so hooks never delay Claude.
 }
 ```
 
-### The purple flash, and its one false positive
+### Purple flash
 
-Green and blue map onto real events. Purple doesn't have one, and it's worth
-knowing why before you trust it.
+Green and blue map directly onto events. Purple has no corresponding event and is
+inferred from two checks.
 
-`Notification` is supposed to provide `permission_prompt`, but on the Windows
-desktop app it never fired in testing — not with an exact matcher, not with
-`"*"`, not with none. Those entries are still installed since they cost nothing
-and only ever fire on a real prompt, but don't count on them.
+`Notification` provides a `permission_prompt` type, but it did not fire on the
+Windows desktop app during testing, with an exact matcher, with `"*"`, or with no
+matcher. Those entries are still installed because they only fire on a real
+prompt, but they are not relied upon.
 
-So purple is inferred from two checks:
+**Permission mode.** Every hook receives `permission_mode` on stdin:
 
-**1. Is this a mode that asks at all?** Every hook receives `permission_mode` on
-stdin:
-
-| `permission_mode` | Flashes? |
+| `permission_mode` | Purple fires |
 |---|---|
-| `default`, `plan` | yes — you get prompted |
-| `acceptEdits` | yes — it auto-accepts *edits* but still asks before commands |
-| `auto`, `dontAsk`, `bypassPermissions` | no — nothing is ever asked |
+| `default`, `plan` | Yes — prompts occur |
+| `acceptEdits` | Yes — edits are auto-accepted, commands still prompt |
+| `auto`, `dontAsk`, `bypassPermissions` | No — nothing is prompted |
 
-So it follows your mode automatically, per call. In bypass it is silent without
-being told.
+This is evaluated per call, so switching modes needs no configuration change.
 
-**2. Was this call actually blocked on you?** Even in `default` most calls are
-pre-approved. Nothing in the payload distinguishes them, but behaviour does: an
-approved call completes on its own, a prompted one can't finish until you click.
-`PreToolUse` drops a marker keyed by `tool_use_id`, `PostToolUse` deletes it, and
-the flash waits `prompt_wait_ms` before looking:
+**Whether the call was blocked.** In `default` mode most calls are pre-approved,
+and the payload does not distinguish them. An approved call completes on its own;
+a prompted one cannot complete until answered. `PreToolUse` writes a marker keyed
+by `tool_use_id`, `PostToolUse` removes it, and the flash waits `prompt_wait_ms`
+before checking:
 
-| After the wait | Meaning | Result |
+| After the wait | Interpretation | Result |
 |---|---|---|
-| marker gone | the tool ran and finished | silent |
-| marker still there | something is waiting on you | purple |
+| Marker removed | Call completed | Silent |
+| Marker present | Call is blocked | Purple |
 
-**The false positive:** an approved call that legitimately runs longer than
-`prompt_wait_ms` looks identical to a prompt and will flash. There is no fix,
-because Claude Code emits no "tool started" event — only before-approval and
-after-completion — so a long-running command and an unanswered prompt are
-genuinely indistinguishable.
+Known limitation: an approved call that runs longer than `prompt_wait_ms` is
+indistinguishable from a pending prompt and will flash. Claude Code emits no
+"tool started" event, only before-approval and after-completion, so the two cases
+cannot be separated.
 
-Measured on the default install: `PostToolUse` costs **~800ms of overhead** even
-for an instant `echo`, which is why the default is 3000ms rather than something
-tighter. Raise it if long commands set purple off:
+`PostToolUse` adds roughly 800 ms of overhead even for an immediate command, which
+is why the default is 3000 ms. Increase it if long-running commands trigger
+purple:
 
 ```bash
 flash set prompt_wait_ms 8000
 ```
 
-Or switch purple off and keep the two exact signals:
+### Session filtering
 
-```bash
-flash set perm_flash off
-```
+Hooks in `~/.claude/settings.json` apply to every Claude Code session. A single
+prompt can spawn background agents, each a separate session firing its own `Stop`
+on completion, which produces flashes while the originating prompt is still
+running.
 
-### Why it ignores background agents
-
-Hooks live in `~/.claude/settings.json`, which is global to every Claude Code
-session. A single prompt can spawn background agents, and each one is its own
-session that fires its own `Stop` when it finishes — so the screen flashes green
-repeatedly while the prompt you are actually waiting on is still running.
-
-Sessions you typed into receive `UserPromptSubmit`; spawned agents never do. A
-`UserPromptSubmit` hook records those ids, and the flash checks against them
-before firing. Turn it off with:
+Sessions that received a typed prompt emit `UserPromptSubmit`; spawned agents do
+not. A `UserPromptSubmit` hook records those session ids and flashes are checked
+against them. If no session has been recorded, flashes still fire.
 
 ```bash
 flash set only_your_sessions off
 ```
 
-It fails open — if no session has been recorded yet, flashes still fire, since
-silence would be worse than an extra flash.
+### Hook behaviour
 
-### Two gotchas worth knowing
+- On events that support matchers, an entry without one never fires. `Stop` takes
+  no matcher; `PreToolUse` and `Notification` require one. Matchers are registered
+  one per exact tool name, as a single `Bash|Write|...` alternation did not match.
+- Hooks are read at session start. Editing `settings.json` has no effect until
+  Claude Code restarts. `config.ini` is read per flash, and rebuilding `flash.exe`
+  applies immediately because the hook command string is unchanged.
 
-- On events that support a matcher, an entry **without** one never fires. `Stop`
-  takes no matcher and works; `PreToolUse` and `Notification` need one. Matchers
-  are registered one per exact tool name — a single `Bash|Write|...` alternation
-  did not match.
-- Hooks load when the session starts. Editing `settings.json` mid-session does
-  nothing until you restart Claude Code. Changing `config.ini`, however, applies
-  to the very next flash — as does rebuilding `flash.exe`, since the hook command
-  string is unchanged.
+### Overlay
 
-### The overlay
+One layered window per monitor, drawn with `UpdateLayeredWindow` so opacity varies
+per pixel; the tint is stronger at the edges than the centre, which keeps
+underlying content readable. The window is `WS_EX_TRANSPARENT` (clicks pass
+through), `WS_EX_NOACTIVATE` (never takes focus) and `WS_EX_TOOLWINDOW` (excluded
+from alt-tab).
 
-One layered window per monitor, drawn with `UpdateLayeredWindow` so alpha varies
-per pixel — the tint is stronger at the edges than in the middle, which makes it
-noticeable without hiding your work. It's `WS_EX_TRANSPARENT` (clicks pass
-straight through), `WS_EX_NOACTIVATE` (never takes focus) and `WS_EX_TOOLWINDOW`
-(stays out of alt-tab).
+Because clicks pass through, the overlay receives no input, so dismissal is
+detected separately. It polls `GetAsyncKeyState` on the animation timer rather
+than installing `SetWindowsHookEx(WH_KEYBOARD_LL)`: a global keyboard hook matches
+the behaviour antivirus associates with keyloggers, and those API names are absent
+from the compiled binary. Polling installs nothing, intercepts nothing, and only
+runs during the ~1 second the flash is visible. The loop stops at the first key
+that changed state and does not record which one.
 
-Because clicks pass through, the overlay never sees input, so dismissing it means
-detecting input another way.
+### Antivirus
 
-**It does not install a keyboard hook.** `SetWindowsHookEx(WH_KEYBOARD_LL)` is
-the obvious approach and the wrong one: a global keyboard hook is the defining
-behaviour of a keylogger, antivirus treats it as such, and an unsigned binary
-that installs one is asking to be quarantined. Those API names do not appear in
-the compiled binary at all. It polls `GetAsyncKeyState` on the animation timer
-instead — no hook, nothing intercepted, and it can only observe during the ~1
-second the flash is up. The loop stops at the first key that changed and never
-records which one.
+`flash.exe` is unsigned, and each rebuild produces a new hash with no reputation,
+so Defender may perform a cloud reputation check or quarantine it. If flashes stop
+working, verify the binary is still present:
 
-### If Windows warns about it
-
-`flash.exe` is unsigned and every rebuild produces a new hash with no reputation,
-so Defender may run a cloud check the first time a freshly built copy runs. That
-is a reputation warning, not a detection. Confirm nothing was flagged:
+```powershell
+Test-Path "$env:LOCALAPPDATA\Microsoft\WindowsApps\flash.exe"
+```
 
 ```powershell
 Get-MpThreatDetection | Select-Object InitialDetectionTime, ThreatID, Resources
 ```
 
-Signing would remove the warning, and costs money. Building from source — the
-only way this ships — means you can read what it does first.
+Adding an exclusion for the install directory prevents recurrence. Code signing
+would remove the warning entirely.
 
-## Testing it
+## Testing
 
 ```bash
 powershell -ExecutionPolicy Bypass -File selftest.ps1
 ```
 
-Drives every hook the way Claude Code does — through `cmd.exe` with the real
-JSON payload on stdin — and checks a flash actually rendered, including that
-purple stays silent for an approved call and fires for a blocked one.
+Invokes each hook the way Claude Code does — through `cmd.exe` with the real JSON
+payload on stdin — and verifies a flash rendered. Coverage includes purple firing
+across permission modes, staying silent for approved calls and firing for blocked
+ones, every command path staying silent while disabled, and 20 concurrent hooks
+under a disabled switch.
 
-It asserts on a timestamp the overlay writes when it genuinely draws, **not** on
-the presence of a `flash.exe` process. The short-lived `--bg` parent shares that
-name, and an earlier version of this suite passed on the parent while the purple
-flash was completely broken.
+Assertions use a timestamp the overlay writes when it draws, rather than the
+presence of a `flash.exe` process, because the short-lived `--bg` parent shares
+that process name.
 
-### Other platforms
+## Other platforms
 
-The hook wiring would carry over, since `~/.claude/settings.json` is the same
-everywhere; only the overlay needs rewriting.
+The hook configuration is portable since `~/.claude/settings.json` is identical
+across platforms; only the overlay requires reimplementation.
 
 - **macOS** — a borderless `NSWindow` at `.screenSaver` level with
-  `ignoresMouseEvents = true`, one per `NSScreen`. Swift, roughly a hundred lines.
+  `ignoresMouseEvents = true`, one per `NSScreen`.
 - **Linux** — compositor-dependent. On X11, an override-redirect window with an
   empty input region via XShape. Wayland has no portable equivalent;
   `wlr-layer-shell` covers wlroots compositors only.
 
 ## Notes
 
-- Covers every monitor, and is DPI-aware, so it fills scaled displays exactly.
-- A new flash cancels one still fading, so the colour always reflects the latest event.
-- Message boxes only appear for commands you type (`set`, `status`, `help`). Hook-driven flashes are always silent.
-- If it ever fails, it writes `%LOCALAPPDATA%\ClaudeFlash\error.log` rather than dying silently.
-- Create `%LOCALAPPDATA%\ClaudeFlash\trace` (any content) to log every invocation to
-  `timing.log`; delete it to stop. Each line is written *before* any gate, so an empty
-  log proves nothing ran, rather than leaving "never invoked" and "invoked but
-  suppressed" indistinguishable.
+- Covers all monitors and is DPI-aware, filling scaled displays exactly.
+- A new flash cancels one still fading, so the colour reflects the latest event.
+- Message boxes appear only for interactive commands (`set`, `status`, `help`).
+  Hook-driven flashes are silent.
+- Failures are written to `%LOCALAPPDATA%\ClaudeFlash\error.log`.
+- Creating `%LOCALAPPDATA%\ClaudeFlash\trace` logs every invocation to
+  `timing.log`, including the enabled state, before any gate is applied. Delete
+  the file to stop.
 
 ## License
 
