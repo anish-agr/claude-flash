@@ -48,7 +48,7 @@ if (Test-Path $appPaths) {
 
 # ---- shortcuts --------------------------------------------------------------
 $desktop = [Environment]::GetFolderPath('Desktop')
-foreach ($name in 'Claude Flash (test).lnk', 'Claude Flash on-off.lnk') {
+foreach ($name in 'Claude Flash toggle.lnk', 'Claude Flash (test).lnk', 'Claude Flash on-off.lnk', 'Claude Flash ON.lnk', 'Claude Flash OFF.lnk') {
     $lnk = Join-Path $desktop $name
     if (Test-Path $lnk) { Remove-Item $lnk -Force; Ok "Removed $name" }
 }
