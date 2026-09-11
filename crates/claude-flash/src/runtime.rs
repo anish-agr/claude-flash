@@ -55,6 +55,7 @@ pub struct Runtime {
     shared: Arc<Shared>,
     journal: JournalWriter,
     journal_failing: bool,
+    state_failing: bool,
     epoch: Instant,
     started_unix_ms: u64,
     config_stamp: Option<(SystemTime, u64)>,
@@ -83,6 +84,7 @@ impl Runtime {
         let mut runtime = Runtime {
             journal: JournalWriter::new(paths.journal_dir(), config.journal.retain_days),
             journal_failing: false,
+            state_failing: false,
             config_stamp: file_stamp(&paths.config_file()),
             engine: Engine::new(config),
             paths,
@@ -314,10 +316,18 @@ impl Runtime {
             interactive: self.engine.interactive_sessions().clone(),
         };
         if state != self.state {
-            if let Err(e) = state.save(&self.paths.state_file()) {
-                log!("could not save {}: {e}", self.paths.state_file().display());
+            // Only a saved state counts as saved, so a failed write is tried again.
+            match state.save(&self.paths.state_file()) {
+                Ok(()) => {
+                    self.state = state;
+                    self.state_failing = false;
+                }
+                Err(e) if !self.state_failing => {
+                    log!("could not save {}: {e}", self.paths.state_file().display());
+                    self.state_failing = true;
+                }
+                Err(_) => {}
             }
-            self.state = state;
         }
     }
 
