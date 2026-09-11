@@ -1,0 +1,19 @@
+{
+  "title": "A queued flash that comes due goes first, so two flashes never start together",
+  "steps": [
+    { "at": "0ms", "hook": { "hook_event_name": "Stop", "session_id": "a", "cwd": "/work/app" }, "expect": ["flash done"] },
+    {
+      "at": "400ms",
+      "hook": { "hook_event_name": "PermissionRequest", "session_id": "b", "cwd": "/work/app", "tool_name": "Bash", "tool_use_id": "t1" },
+      "expect": []
+    },
+    {
+      "at": "1000ms",
+      "note": "A finished turn lands at the very moment the queued approval is due",
+      "hook": { "hook_event_name": "Stop", "session_id": "c", "cwd": "/work/app" },
+      "expect": ["flash approval"]
+    },
+    { "at": "1999ms", "hook": { "hook_event_name": "Stop", "session_id": "d", "cwd": "/work/app" }, "expect": [] },
+    { "at": "2000ms", "hook": { "hook_event_name": "Stop", "session_id": "e", "cwd": "/work/app" }, "expect": ["flash done"] }
+  ]
+}
