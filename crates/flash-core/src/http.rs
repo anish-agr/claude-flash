@@ -170,7 +170,9 @@ fn dechunk(mut buf: &[u8], max_body: usize) -> Result<Option<(Vec<u8>, usize)>, 
             }
             return Ok(Some((body, total - buf.len())));
         }
-        if body.len() + size > max_body {
+        // Compared by subtraction: the size came from the client and can be anything
+        // up to usize::MAX, so adding to it could overflow.
+        if size > max_body.saturating_sub(body.len()) {
             return Err(HttpError::BodyTooLarge);
         }
         if buf.len() < size + 2 {
@@ -262,6 +264,12 @@ pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_huge_chunk_size_is_refused_rather_than_overflowing() {
+        let request = b"POST /x HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\nffffffffffffffff\r\nabc";
+        assert_eq!(parse(request, DEFAULT_LIMITS), Parse::Invalid(HttpError::BodyTooLarge));
+    }
 
     fn complete(raw: &[u8]) -> Request {
         match parse(raw, DEFAULT_LIMITS) {
