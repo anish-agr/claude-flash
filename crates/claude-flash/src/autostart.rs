@@ -215,13 +215,13 @@ mod platform {
     pub fn registered() -> Option<PathBuf> {
         let text = fs::read_to_string(entry()).ok()?;
         let exec = text.lines().find_map(|line| line.strip_prefix("Exec="))?;
-        Some(PathBuf::from(exec.trim().trim_matches('"')))
+        Some(PathBuf::from(program_of(exec)))
     }
 
     pub fn enable(agent: &Path) -> io::Result<()> {
         let text = format!(
-            "[Desktop Entry]\nType=Application\nName=Claude Flash\nComment=Attention signals for Claude Code\nExec=\"{}\"\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n",
-            agent.display()
+            "[Desktop Entry]\nType=Application\nName=Claude Flash\nComment=Attention signals for Claude Code\nExec={}\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n",
+            exec_argument(&agent.display().to_string())
         );
         store::write_atomic(&entry(), text.as_bytes())
     }
@@ -230,6 +230,57 @@ mod platform {
         match fs::remove_file(entry()) {
             Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
             _ => Ok(()),
+        }
+    }
+
+    /// A path as one argument of a desktop entry's `Exec` key. Inside the quotes,
+    /// `"`, `` ` ``, `$` and `\` take a backslash and `%` is doubled; the general
+    /// escaping of string values then doubles every backslash.
+    fn exec_argument(path: &str) -> String {
+        let mut quoted = String::from("\"");
+        for c in path.chars() {
+            match c {
+                '"' | '`' | '$' | '\\' => {
+                    quoted.push('\\');
+                    quoted.push(c);
+                }
+                '%' => quoted.push_str("%%"),
+                c => quoted.push(c),
+            }
+        }
+        quoted.push('"');
+        quoted.replace('\\', "\\\\")
+    }
+
+    /// Reverses [`exec_argument`].
+    fn program_of(exec: &str) -> String {
+        let unescaped = exec.trim().replace("\\\\", "\\");
+        let inner = unescaped.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(&unescaped);
+        let mut program = String::with_capacity(inner.len());
+        let mut chars = inner.chars();
+        while let Some(c) = chars.next() {
+            match c {
+                '\\' => program.extend(chars.next()),
+                '%' => {
+                    chars.next();
+                    program.push('%');
+                }
+                c => program.push(c),
+            }
+        }
+        program
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn exec_paths_survive_quoting() {
+            for path in ["/usr/local/bin/flash-agent", "/home/a b/it's $HOME/\"x\"/back\\slash/100%"] {
+                assert_eq!(program_of(&exec_argument(path)), path);
+            }
+            assert_eq!(exec_argument("/opt/a$b"), "\"/opt/a\\\\$b\"");
         }
     }
 }
