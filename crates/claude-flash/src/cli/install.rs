@@ -67,7 +67,12 @@ pub fn install(env: &Env, args: &InstallArgs) -> Outcome {
         step("hooks", &detail);
     }
 
-    if !args.no_autostart {
+    if args.no_autostart {
+        if autostart::registered().is_some() {
+            autostart::disable().map_err(|e| format!("could not stop the agent starting at login: {e}"))?;
+            step("at login", "the agent no longer starts when you log in");
+        }
+    } else {
         autostart::enable(&flash_agent).map_err(|e| format!("could not set the agent to start at login: {e}"))?;
         step("at login", "the agent starts when you log in");
     }
