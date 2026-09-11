@@ -87,16 +87,39 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
-          Add-Type -AssemblyName System.Drawing, System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class Capture {
+              [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+              [DllImport("user32.dll")] static extern int GetSystemMetrics(int index);
+              [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hwnd);
+              [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr hwnd, IntPtr hdc);
+              [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+              [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleBitmap(IntPtr hdc, int w, int h);
+              [DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr hdc, IntPtr obj);
+              [DllImport("gdi32.dll")] static extern bool BitBlt(IntPtr dst, int x, int y, int w, int h, IntPtr src, int sx, int sy, uint rop);
+              [DllImport("gdi32.dll")] static extern bool DeleteDC(IntPtr hdc);
+              public static IntPtr Screen() {
+                  SetProcessDPIAware();
+                  int x = GetSystemMetrics(76), y = GetSystemMetrics(77), w = GetSystemMetrics(78), h = GetSystemMetrics(79);
+                  IntPtr screen = GetDC(IntPtr.Zero);
+                  IntPtr mem = CreateCompatibleDC(screen);
+                  IntPtr bitmap = CreateCompatibleBitmap(screen, w, h);
+                  IntPtr old = SelectObject(mem, bitmap);
+                  // CAPTUREBLT includes layered windows, which is what the overlay is.
+                  BitBlt(mem, 0, 0, w, h, screen, x, y, 0x00CC0020 | 0x40000000);
+                  SelectObject(mem, old);
+                  DeleteDC(mem);
+                  ReleaseDC(IntPtr.Zero, screen);
+                  return bitmap;
+              }
+          }
+          '@
           Start-Process -FilePath target/release/flash.exe -ArgumentList 'test', 'approval'
-          Start-Sleep -Milliseconds 350
-          $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
-          $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
-          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-          # CaptureBlt includes layered windows, which is what the overlay is.
-          $op = [System.Drawing.CopyPixelOperation]::SourceCopy -bor [System.Drawing.CopyPixelOperation]::CaptureBlt
-          $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size, $op)
-          $bitmap.Save("$PWD/flash-windows.png", [System.Drawing.Imaging.ImageFormat]::Png)
+          Start-Sleep -Milliseconds 400
+          [System.Drawing.Image]::FromHbitmap([Capture]::Screen()).Save("$PWD/flash-windows.png", [System.Drawing.Imaging.ImageFormat]::Png)
       - name: Screenshot a flash (macOS)
         if: runner.os == 'macOS'
         continue-on-error: true
