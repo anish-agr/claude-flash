@@ -58,6 +58,12 @@ pub fn run(options: Options) -> ExitCode {
         return ExitCode::FAILURE;
     }
     logging::init(&paths.log_file(), options.echo);
+    // The agent usually has no console, so a panic would otherwise leave no trace.
+    let report = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        log!("panic: {info}");
+        report(info);
+    }));
     let port = options.port.unwrap_or_else(|| configured_port(&paths));
 
     let listener = match TcpListener::bind((Ipv4Addr::LOCALHOST, port)) {
@@ -78,8 +84,14 @@ pub fn run(options: Options) -> ExitCode {
     if options.toggle {
         let _ = requests.send(Request::Control(Control::Toggle { confirm: true }, None));
     }
-    let server =
-        Server { listener, port, token, requests: requests.clone(), hub: Arc::clone(&hub), shared: Arc::clone(&shared) };
+    let server = Server {
+        listener,
+        port,
+        token,
+        requests: requests.clone(),
+        hub: Arc::clone(&hub),
+        shared: Arc::clone(&shared),
+    };
     if let Err(e) = server.spawn() {
         log!("cannot start the HTTP server: {e}");
         return ExitCode::FAILURE;

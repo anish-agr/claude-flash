@@ -114,7 +114,8 @@ mod tests {
         // 23:30 in UTC-7 on the 10th is 06:30 UTC on the 11th.
         let late = NOON + 18 * 3_600_000 + 30 * 60_000;
         writer.append(&record(late, "late"), late, -420).unwrap();
-        let names: Vec<String> = day_files(&dir).iter().map(|(_, p)| p.file_name().unwrap().to_string_lossy().into()).collect();
+        let names: Vec<String> =
+            day_files(&dir).iter().map(|(_, p)| p.file_name().unwrap().to_string_lossy().into()).collect();
         assert_eq!(names, ["2026-09-10.jsonl", "2026-09-11.jsonl"]);
         assert_eq!(fs::read_to_string(dir.join("2026-09-10.jsonl")).unwrap().lines().count(), 2);
     }

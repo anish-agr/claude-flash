@@ -173,9 +173,63 @@ pub fn paint(buf: &mut [u8], width: usize, height: usize, color: Rgb, style: Sty
     }
 }
 
+/// Draws the Claude Flash icon, a shaded sphere, `size` pixels square in `color`,
+/// with straight rather than premultiplied alpha. The tray and the menu bar show it
+/// in the colour of the current state.
+pub fn sphere(buf: &mut [u8], size: usize, color: Rgb, order: ByteOrder) {
+    assert_eq!(buf.len(), size * size * 4, "buffer does not match dimensions");
+    let (red, blue) = match order {
+        ByteOrder::Bgra => (2, 0),
+        ByteOrder::Rgba => (0, 2),
+    };
+    let radius = size as f32 / 2.0;
+    // Light from the upper left, leaning towards the viewer.
+    let (lx, ly, lz) = {
+        let (x, y, z) = (-0.45f32, -0.55f32, 0.70f32);
+        let n = (x * x + y * y + z * z).sqrt();
+        (x / n, y / n, z / n)
+    };
+    let base = [f32::from(color.r), f32::from(color.g), f32::from(color.b)];
+    for (i, px) in buf.chunks_exact_mut(4).enumerate() {
+        let x = ((i % size) as f32 + 0.5 - radius) / radius;
+        let y = ((i / size) as f32 + 0.5 - radius) / radius;
+        let r2 = x * x + y * y;
+        // Anti-aliased rim: coverage falls from full to none across the edge pixel.
+        let coverage = ((1.0 - r2.sqrt()) * radius + 0.5).clamp(0.0, 1.0);
+        if coverage <= 0.0 {
+            px.fill(0);
+            continue;
+        }
+        let z = (1.0 - r2.min(1.0)).sqrt();
+        let shade = 0.5 + 0.5 * (x * lx + y * ly + z * lz).max(0.0);
+        let (hx, hy) = (x + 0.35, y + 0.4);
+        let highlight = (1.0 - (hx * hx + hy * hy).sqrt() / 0.6).clamp(0.0, 1.0).powi(2) * 0.6;
+        for (channel, value) in [red, 1, blue].into_iter().zip(base) {
+            let lit = value * shade;
+            px[channel] = (lit + (255.0 - lit) * highlight).round() as u8;
+        }
+        px[3] = (coverage * 255.0).round() as u8;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sphere_is_solid_in_the_middle_clear_at_the_corners_and_lit_from_above_left() {
+        let size = 32;
+        let mut buf = vec![0u8; size * size * 4];
+        sphere(&mut buf, size, Rgb::new(0x00, 0xFF, 0x5A), ByteOrder::Rgba);
+        let at = |x: usize, y: usize| {
+            let i = (y * size + x) * 4;
+            [buf[i], buf[i + 1], buf[i + 2], buf[i + 3]]
+        };
+        assert_eq!(at(16, 16)[3], 255);
+        assert_eq!(at(0, 0)[3], 0);
+        assert_eq!(at(31, 31)[3], 0);
+        assert!(at(10, 9)[0] > at(22, 23)[0], "the highlight sits up and to the left");
+    }
 
     const T: Timing =
         Timing { fade_in_ms: 70, hold_ms: 420, fade_out_ms: 560, dismiss_fade_ms: 110, min_visible_ms: 120 };

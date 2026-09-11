@@ -109,7 +109,8 @@ fn describe(path: &Path, change: &Change, dry_run: bool) {
         return;
     }
     if change.added > 0 {
-        let replaced = if change.removed > 0 { format!(", replacing {} older ones", change.removed) } else { String::new() };
+        let replaced =
+            if change.removed > 0 { format!(", replacing {} older ones", change.removed) } else { String::new() };
         println!("added {} hooks to {shown}{replaced}", change.added);
         println!("{}", style::dim("Claude Code reads hooks when a session starts; restart open sessions to use them."));
     } else {
