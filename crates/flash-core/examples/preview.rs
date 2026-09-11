@@ -101,7 +101,7 @@ fn panel(kind: Attention, word: &str) -> Canvas {
     let mut wash = vec![0u8; PANEL_W * PANEL_H * 4];
     render::paint(&mut wash, PANEL_W, PANEL_H, signal.color, Style::Wash, 0.32, ByteOrder::Rgba);
     let opacity = signal.opacity as f32;
-    for (i, px) in wash.chunks_exact(4).enumerate() {
+    for (i, px) in wash.as_chunks::<4>().0.iter().enumerate() {
         c.blend(i, signal.color, f32::from(px[3]) / 255.0 * opacity);
     }
 
