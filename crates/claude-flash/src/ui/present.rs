@@ -15,9 +15,9 @@ pub const KINDS: [Attention; 4] = [Attention::Done, Attention::Question, Attenti
 /// Pause lengths offered in the menu: the duration, and its label.
 pub const PAUSES: [(&str, &str); 3] = [("15m", "For 15 minutes"), ("1h", "For 1 hour"), ("3h", "For 3 hours")];
 
-pub const QUIT_DETAIL: &str = "Claude Code sessions that are already open cannot reach Claude Flash until it \
-    runs again. It starts again when you log in, or when a new Claude Code session starts.\n\n\
-    To stop flashes without quitting, turn off Flashes on or choose Pause.";
+pub const QUIT_DETAIL: &str = "Until Claude Flash runs again, Claude Code sessions that are already open will \
+    report hook errors. It starts again when you log in, or when a new Claude Code session starts.\n\n\
+    To stop flashes but keep the agent running, uncheck Flashes on or use Pause.";
 
 const OFF: Rgb = Rgb::new(0x8A, 0x8F, 0x98);
 const PAUSED: Rgb = Rgb::new(0xFF, 0xAA, 0x00);
