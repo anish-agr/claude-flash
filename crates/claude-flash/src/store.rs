@@ -63,7 +63,9 @@ fn write_replacing(path: &Path, bytes: &[u8], private: bool) -> io::Result<()> {
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let tmp = dir.join(format!(".{name}.{}.tmp", std::process::id()));
     let mut options = fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
+    // `create_new` never reuses a leftover file, which could have wider permissions,
+    // and never follows a symlink left at this name.
+    options.write(true).create_new(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -71,7 +73,11 @@ fn write_replacing(path: &Path, bytes: &[u8], private: bool) -> io::Result<()> {
     }
     #[cfg(not(unix))]
     let _ = private;
-    let result = options.open(&tmp).and_then(|mut file| file.write_all(bytes)).and_then(|()| rename(&tmp, path));
+    let file = match options.open(&tmp) {
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => fs::remove_file(&tmp).and_then(|()| options.open(&tmp)),
+        opened => opened,
+    };
+    let result = file.and_then(|mut file| file.write_all(bytes)).and_then(|()| rename(&tmp, path));
     if result.is_err() {
         let _ = fs::remove_file(&tmp);
     }
@@ -144,6 +150,21 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_leftover_temporary_file_cannot_widen_a_secret() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = scratch("leftover");
+        fs::create_dir_all(&dir).unwrap();
+        let stale = dir.join(format!(".token.{}.tmp", std::process::id()));
+        fs::write(&stale, "old").unwrap();
+        fs::set_permissions(&stale, fs::Permissions::from_mode(0o666)).unwrap();
+        let path = dir.join("token");
+        write_private(&path, b"secret").unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "secret");
+        assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
     }
 
     #[test]
