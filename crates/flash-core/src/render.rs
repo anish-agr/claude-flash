@@ -163,7 +163,7 @@ pub fn paint(buf: &mut [u8], width: usize, height: usize, color: Rgb, style: Sty
     let (r, g, b) = (f32::from(color.r), f32::from(color.g), f32::from(color.b));
     for (y, row) in buf.chunks_exact_mut(width * 4).enumerate() {
         let ry = rows[y];
-        for (x, px) in row.chunks_exact_mut(4).enumerate() {
+        for (x, px) in row.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let a = combine(cols[x], ry).clamp(0.0, 1.0);
             px[ci0] = (r * a + 0.5) as u8;
             px[1] = (g * a + 0.5) as u8;
@@ -190,7 +190,7 @@ pub fn sphere(buf: &mut [u8], size: usize, color: Rgb, order: ByteOrder) {
         (x / n, y / n, z / n)
     };
     let base = [f32::from(color.r), f32::from(color.g), f32::from(color.b)];
-    for (i, px) in buf.chunks_exact_mut(4).enumerate() {
+    for (i, px) in buf.as_chunks_mut::<4>().0.iter_mut().enumerate() {
         let x = ((i % size) as f32 + 0.5 - radius) / radius;
         let y = ((i / size) as f32 + 0.5 - radius) / radius;
         let r2 = x * x + y * y;
@@ -306,7 +306,7 @@ mod tests {
         let c = Rgb::new(200, 100, 10);
         paint(&mut rgba, w, h, c, Style::Wash, 0.5, ByteOrder::Rgba);
         paint(&mut bgra, w, h, c, Style::Wash, 0.5, ByteOrder::Bgra);
-        for (p, q) in rgba.chunks_exact(4).zip(bgra.chunks_exact(4)) {
+        for (p, q) in rgba.as_chunks::<4>().0.iter().zip(bgra.as_chunks::<4>().0) {
             assert!(p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3], "colour must not exceed alpha");
             assert_eq!((p[0], p[1], p[2], p[3]), (q[2], q[1], q[0], q[3]));
         }
