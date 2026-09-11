@@ -136,8 +136,10 @@ less than 334 ms, which keeps any burst within three flashes per second, the WCA
 2.3.1 general flash threshold. A signal arriving during the interval is dropped if
 it is no more urgent than the flash that just started, because that flash already
 covered it. A more urgent one, such as an approval arriving just after a done
-flash, is shown when the interval ends. The order of urgency is done, error,
-question, approval.
+flash, is shown when the interval ends. A queued flash that comes due at the same
+moment as a new signal goes first, and the new signal is weighed against it, so two
+flashes never start together. The order of urgency is done, error, question,
+approval.
 
 ### Presence
 
@@ -145,13 +147,15 @@ The runtime reads the time since the last keyboard or mouse input on every tick.
 Past `presence.away_after`, you count as away, and signals turn into notifications
 and pushes as above. On your return the engine flashes once, in the colour of the
 most urgent signal among the waits still open and the signals that arrived while
-you were gone.
+you were gone, unless you come back to an application listed in
+`flash.skip_when_focused`.
 
 ### Reminders
 
 With `flash.remind_after` set, every open wait flashes again each time that long
-passes without an answer, unless you are away, paused, switched off or in quiet
-hours.
+passes without an answer, unless you are away, paused, switched off, in quiet
+hours or looking at an application listed in `flash.skip_when_focused`. A reminder
+held back that way is shown as soon as nothing stands in its way.
 
 ### Testing the engine
 
