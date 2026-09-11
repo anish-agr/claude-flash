@@ -27,12 +27,15 @@ impl Agent {
         let home = std::env::temp_dir().join(format!("claude-flash-it-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&home);
         fs::create_dir_all(&home).unwrap();
-        let port = free_port();
-        fs::write(home.join("config.toml"), format!("[agent]\nport = {port}\n")).unwrap();
-        let child = spawn_agent(&home);
-        let agent = Agent { child, home, port };
-        agent.wait_for("the agent to answer", |a| a.client().health().is_ok());
-        agent
+        let (child, port) = launch(&home, free_port());
+        Agent { child, home, port }
+    }
+
+    /// Stops the agent and starts it again on the same data directory.
+    fn restart(&mut self) {
+        self.client().control(&Control::Quit).unwrap();
+        self.child.wait().unwrap();
+        (self.child, self.port) = launch(&self.home, self.port);
     }
 
     fn client(&self) -> Client {
@@ -94,6 +97,32 @@ impl Drop for Agent {
         let _ = self.child.wait();
         let _ = fs::remove_dir_all(&self.home);
     }
+}
+
+/// Starts a headless agent on `home` and waits until that very process answers.
+///
+/// A port that was free a moment ago can be taken before the agent binds it, most
+/// often as the local end of another test's connection. The agent then exits, and
+/// the next attempt uses a different port.
+fn launch(home: &Path, mut port: u16) -> (Child, u16) {
+    for _ in 0..5 {
+        fs::write(home.join("config.toml"), format!("[agent]\nport = {port}\n")).unwrap();
+        let mut child = spawn_agent(home);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline {
+            if Client::new(port, None).health().is_ok_and(|health| health.pid == child.id()) {
+                return (child, port);
+            }
+            if child.try_wait().unwrap().is_some() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+        port = free_port();
+    }
+    panic!("could not start an agent for {}", home.display());
 }
 
 fn spawn_agent(home: &Path) -> Child {
@@ -206,10 +235,7 @@ fn switches_work_through_the_cli_and_survive_a_restart() {
     assert!(!agent.flash(&["pause", "15"]).status.success(), "a bare number is refused");
 
     // Restart: the switch and the pause come back from disk.
-    agent.client().control(&Control::Quit).unwrap();
-    agent.child.wait().unwrap();
-    agent.child = spawn_agent(&agent.home);
-    agent.wait_for("the agent to restart", |a| a.client().health().is_ok());
+    agent.restart();
     let status = agent.status();
     assert!(!status.enabled);
     assert!(status.paused_for_ms.is_some_and(|ms| ms > 14 * 60_000));
