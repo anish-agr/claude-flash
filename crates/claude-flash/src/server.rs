@@ -141,7 +141,9 @@ impl Server {
     fn signal(&self, request: &HttpRequest) -> Vec<u8> {
         match serde_json::from_slice::<Signal>(&request.body) {
             Ok(signal) => {
-                let _ = self.requests.send(Request::Signal(signal));
+                if self.requests.send(Request::Signal(signal)).is_err() {
+                    return error(503, "the agent is shutting down");
+                }
                 http::json_response(202, &json!({ "accepted": true }))
             }
             Err(e) => error(400, &format!("not a valid signal: {e}")),
