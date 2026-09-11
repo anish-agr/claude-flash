@@ -4,7 +4,7 @@
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
@@ -42,7 +42,6 @@ impl Server {
     }
 
     fn accept(self: Arc<Self>) {
-        let active = Arc::new(AtomicUsize::new(0));
         for stream in self.listener.incoming() {
             let mut stream = match stream {
                 Ok(stream) => stream,
@@ -52,19 +51,21 @@ impl Server {
                     continue;
                 }
             };
-            if active.fetch_add(1, Ordering::SeqCst) >= MAX_CONNECTIONS {
-                active.fetch_sub(1, Ordering::SeqCst);
+            // Counted where the runtime can see it, so it can let answers finish
+            // before the process exits.
+            if self.shared.connections.fetch_add(1, Ordering::SeqCst) >= MAX_CONNECTIONS {
+                self.shared.connections.fetch_sub(1, Ordering::SeqCst);
                 let _ = stream.write_all(&error(503, "too many connections"));
                 continue;
             }
-            let (server, counter) = (Arc::clone(&self), Arc::clone(&active));
+            let server = Arc::clone(&self);
             let spawned =
                 thread::Builder::new().name("http-connection".into()).stack_size(256 * 1024).spawn(move || {
                     server.serve(stream);
-                    counter.fetch_sub(1, Ordering::SeqCst);
+                    server.shared.connections.fetch_sub(1, Ordering::SeqCst);
                 });
             if spawned.is_err() {
-                active.fetch_sub(1, Ordering::SeqCst);
+                self.shared.connections.fetch_sub(1, Ordering::SeqCst);
             }
         }
     }

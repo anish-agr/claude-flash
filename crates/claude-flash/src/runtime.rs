@@ -8,8 +8,9 @@ use std::fs;
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender};
+use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
 use flash_core::config::{self, Config};
@@ -42,6 +43,8 @@ pub enum Request {
 pub struct Shared {
     /// Hook events dropped because their session set `CLAUDE_FLASH=off`.
     pub opted_out: AtomicU64,
+    /// Connections the HTTP server is still answering.
+    pub connections: AtomicUsize,
 }
 
 pub struct Runtime {
@@ -136,8 +139,18 @@ impl Runtime {
             }
         }
         self.persist();
+        self.let_answers_finish();
         self.ui.send(UiEvent::Quit);
         log!("agent stopped");
+    }
+
+    /// Gives requests still being answered, the one that asked the agent to quit
+    /// among them, a moment to finish before the process exits under them.
+    fn let_answers_finish(&self) {
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while self.shared.connections.load(Ordering::SeqCst) > 0 && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
     }
 
     fn deadline(&self) -> Option<Instant> {
