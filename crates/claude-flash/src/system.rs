@@ -23,7 +23,8 @@ fn fill_random(buf: &mut [u8]) -> io::Result<()> {
     let len = u32::try_from(buf.len()).map_err(|_| io::Error::other("random request too large"))?;
     // SAFETY: `buf` is valid for `len` bytes, and the system-preferred RNG flag is
     // documented to take a null algorithm handle.
-    let status = unsafe { BCryptGenRandom(std::ptr::null_mut(), buf.as_mut_ptr(), len, BCRYPT_USE_SYSTEM_PREFERRED_RNG) };
+    let status =
+        unsafe { BCryptGenRandom(std::ptr::null_mut(), buf.as_mut_ptr(), len, BCRYPT_USE_SYSTEM_PREFERRED_RNG) };
     if status == 0 { Ok(()) } else { Err(io::Error::other(format!("BCryptGenRandom failed with {status:#x}"))) }
 }
 
@@ -65,7 +66,11 @@ pub fn utc_offset_minutes() -> i32 {
 pub fn open(path: &Path) -> io::Result<()> {
     #[cfg(windows)]
     {
-        if shell_open(path) { Ok(()) } else { Err(io::Error::other(format!("Windows could not open {}", path.display()))) }
+        if shell_open(path) {
+            Ok(())
+        } else {
+            Err(io::Error::other(format!("Windows could not open {}", path.display())))
+        }
     }
     #[cfg(target_os = "macos")]
     {
@@ -79,21 +84,22 @@ pub fn open(path: &Path) -> io::Result<()> {
     }
 }
 
-/// Opens a text file for editing: `$VISUAL` or `$EDITOR` from a terminal, otherwise
-/// the system's text editor.
-pub fn edit(path: &Path, wait: bool) -> io::Result<()> {
+/// Opens a text file for editing from a terminal: in `$VISUAL` or `$EDITOR`, waiting
+/// for it to close, or else in the system's text editor.
+pub fn edit(path: &Path) -> io::Result<()> {
     let editor = std::env::var("VISUAL").ok().or_else(|| std::env::var("EDITOR").ok()).filter(|e| !e.trim().is_empty());
-    if let Some(editor) = editor {
-        let mut parts = editor.split_whitespace();
-        let program = parts.next().expect("filtered to non-empty");
-        let mut child = Command::new(program).args(parts).arg(path).spawn()?;
-        if wait {
-            child.wait()?;
-        } else {
-            reap(child);
+    match editor {
+        Some(editor) => {
+            let mut parts = editor.split_whitespace();
+            let program = parts.next().expect("filtered to non-empty");
+            Command::new(program).args(parts).arg(path).status().map(drop)
         }
-        return Ok(());
+        None => open_text(path),
     }
+}
+
+/// Opens a text file in the system's editor for text.
+pub fn open_text(path: &Path) -> io::Result<()> {
     #[cfg(windows)]
     {
         if shell_open(path) {
@@ -121,7 +127,14 @@ fn shell_open(path: &Path) -> bool {
     let verb = wide("open");
     // SAFETY: both strings are NUL-terminated UTF-16 and outlive the call.
     let result = unsafe {
-        ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), file.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL)
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            verb.as_ptr(),
+            file.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
     };
     // Values above 32 mean success; anything else is an error code, including "no
     // application is associated with this file type".

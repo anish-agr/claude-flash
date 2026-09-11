@@ -18,7 +18,10 @@ pub enum ClientError {
     /// Something answered, but not the way the agent does.
     Protocol(String),
     /// The agent refused the request.
-    Api { status: u16, message: String },
+    Api {
+        status: u16,
+        message: String,
+    },
     Io(io::Error),
 }
 

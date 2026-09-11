@@ -15,6 +15,12 @@ use crate::paths::Paths;
 use crate::runtime::{Request, Runtime};
 
 pub mod headless;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(any(windows, target_os = "macos"))]
+mod present;
+#[cfg(windows)]
+mod windows;
 
 pub enum UiEvent {
     Flash(FlashSpec),
@@ -51,5 +57,11 @@ pub struct Native {
 
 /// Runs the platform's front end on this thread until the agent quits.
 pub fn run_native(native: Native) -> ExitCode {
-    headless::run(native)
+    #[cfg(windows)]
+    let run = windows::run;
+    #[cfg(target_os = "macos")]
+    let run = macos::run;
+    #[cfg(not(any(windows, target_os = "macos")))]
+    let run = headless::run;
+    run(native)
 }

@@ -123,7 +123,10 @@ mod tests {
         assert_eq!(pause, Control::Pause { duration: "15m".into() });
         let test: Control = serde_json::from_str(r#"{"action": "test", "kind": "perm"}"#).unwrap();
         assert_eq!(test, Control::Test { kind: Attention::Approval });
-        assert_eq!(serde_json::to_string(&Control::Toggle { confirm: false }).unwrap(), r#"{"action":"toggle","confirm":false}"#);
+        assert_eq!(
+            serde_json::to_string(&Control::Toggle { confirm: false }).unwrap(),
+            r#"{"action":"toggle","confirm":false}"#
+        );
         let bare: Control = serde_json::from_str(r#"{"action": "toggle"}"#).unwrap();
         assert_eq!(bare, Control::Toggle { confirm: false });
     }

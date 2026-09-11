@@ -52,7 +52,7 @@ pub fn run(env: &Env, action: Option<ConfigAction>) -> Outcome {
                 store::write_atomic(&path, config::DEFAULT_TOML.as_bytes())
                     .map_err(|e| format!("could not create {}: {e}", path.display()))?;
             }
-            system::edit(&path, true).map_err(|e| format!("could not open an editor: {e}"))?;
+            system::edit(&path).map_err(|e| format!("could not open an editor: {e}"))?;
         }
         ConfigAction::Check => {
             Config::parse(&read_or_default(&path)?).map_err(|e| e.to_string())?;

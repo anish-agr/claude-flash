@@ -148,7 +148,8 @@ fn default_bin_dir() -> PathBuf {
 /// Copies `flash` and `flash-agent` from `source` into `bin_dir`, unless that is
 /// where they already are.
 fn place_binaries(source: &Path, bin_dir: &Path) -> Result<(PathBuf, PathBuf), String> {
-    let names = [format!("flash{}", std::env::consts::EXE_SUFFIX), format!("flash-agent{}", std::env::consts::EXE_SUFFIX)];
+    let names =
+        [format!("flash{}", std::env::consts::EXE_SUFFIX), format!("flash-agent{}", std::env::consts::EXE_SUFFIX)];
     let placed = (bin_dir.join(&names[0]), bin_dir.join(&names[1]));
     if !same_dir(source, bin_dir) {
         fs::create_dir_all(bin_dir).map_err(|e| format!("could not create {}: {e}", bin_dir.display()))?;

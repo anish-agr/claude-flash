@@ -116,11 +116,7 @@ fn run_curl(config: &str) -> Result<(), String> {
         stdin.write_all(config.as_bytes()).map_err(|e| format!("could not pass the request to curl: {e}"))?;
     }
     let output = child.wait_with_output().map_err(|e| e.to_string())?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).trim().to_owned())
-    }
+    if output.status.success() { Ok(()) } else { Err(String::from_utf8_lossy(&output.stderr).trim().to_owned()) }
 }
 
 #[cfg(test)]
