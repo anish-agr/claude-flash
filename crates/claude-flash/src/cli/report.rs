@@ -245,6 +245,9 @@ fn outcome(record: &Record) -> String {
     if let Some(reason) = record.suppressed {
         return format!("held back: {}", reason.describe());
     }
+    if record.kind.is_some() && record.delivered.is_empty() {
+        return "covered by the flash before it".to_owned();
+    }
     match record.event.as_str() {
         "pause" => "paused".to_owned(),
         "resume" => "resumed".to_owned(),
