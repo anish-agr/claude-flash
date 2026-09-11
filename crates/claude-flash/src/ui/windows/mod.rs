@@ -231,6 +231,8 @@ impl App {
         if self.overlay.is_some() {
             // SAFETY: a timer on our own window, replaced if one is already running.
             unsafe { SetTimer(self.hwnd, ANIMATION_TIMER, FRAME_MS, None) };
+        } else {
+            log!("could not show a {} flash: no overlay window could be created", spec.kind);
         }
     }
 
