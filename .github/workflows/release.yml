@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+          - name: macos-universal
+            os: macos-latest
+          - name: linux-x64
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            cargo build --release --target aarch64-apple-darwin
+            cargo build --release --target x86_64-apple-darwin
+            for bin in flash flash-agent; do
+              lipo -create -output "dist/$bin" \
+                "target/aarch64-apple-darwin/release/$bin" \
+                "target/x86_64-apple-darwin/release/$bin"
+            done
+          else
+            cargo build --release
+            ext=""
+            [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
+            cp "target/release/flash$ext" "target/release/flash-agent$ext" dist/
+          fi
+          cp README.md LICENSE CHANGELOG.md dist/
+      - name: Package
+        shell: bash
+        run: |
+          cd dist
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            7z a "../claude-flash-${{ matrix.name }}.zip" .
+          else
+            tar czf "../claude-flash-${{ matrix.name }}.tar.gz" .
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: claude-flash-${{ matrix.name }}
+          path: claude-flash-${{ matrix.name }}.*
+
+  publish:
+    name: Publish
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS
+      - name: Notes from the changelog
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v heading="## [$version]" 'index($0, heading) == 1 { found = 1; next } /^## / { found = 0 } found' CHANGELOG.md > notes.md
+          test -s notes.md
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "Claude Flash ${GITHUB_REF_NAME#v}" --notes-file notes.md
