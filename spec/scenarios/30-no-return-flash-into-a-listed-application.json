@@ -1,0 +1,9 @@
+{
+  "title": "Coming back to a listed application brings no return flash",
+  "config": "[flash]\nskip_when_focused = [\"WindowsTerminal\"]\n",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    { "at": "10m", "idle": "10m", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["notify done"] },
+    { "at": "11m", "idle": "0s", "focused": "WindowsTerminal", "tick": true, "expect": [] }
+  ]
+}

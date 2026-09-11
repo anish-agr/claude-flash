@@ -197,6 +197,16 @@ struct Deferred {
     spec: FlashSpec,
 }
 
+/// What became of a request to flash.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Requested {
+    Shown,
+    /// Held until the minimum interval ends.
+    Queued,
+    /// A flash of at least the same urgency has just started, and covers it.
+    Covered,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Origin {
     Interactive,
@@ -455,8 +465,9 @@ impl Engine {
                 let mut r = self.record(ctx, "test");
                 r.kind = Some(kind);
                 let spec = self.flash_spec(kind, self.config.signal(kind));
-                self.request_flash(spec, ctx, out);
-                r.delivered.push(Channel::Flash);
+                if self.request_flash(spec, ctx, out) != Requested::Covered {
+                    r.delivered.push(Channel::Flash);
+                }
                 r
             }
         };
@@ -522,8 +533,9 @@ impl Engine {
             return outcome;
         }
         let spec = self.flash_spec(kind, style);
-        self.request_flash(spec, ctx, out);
-        outcome.delivered.push(Channel::Flash);
+        if self.request_flash(spec, ctx, out) != Requested::Covered {
+            outcome.delivered.push(Channel::Flash);
+        }
         outcome
     }
 
@@ -531,7 +543,9 @@ impl Engine {
     /// stronger signal arriving inside the interval is shown when it ends; anything
     /// else was already covered by the flash that just played. However many events
     /// arrive, flashes stay at least the interval apart.
-    fn request_flash(&mut self, spec: FlashSpec, ctx: &Context, out: &mut Vec<Action>) {
+    fn request_flash(&mut self, spec: FlashSpec, ctx: &Context, out: &mut Vec<Action>) -> Requested {
+        // A queued flash that has come due goes first, so two never start together.
+        self.fire_deferred(ctx, out);
         let interval = u64::from(self.config.flash.min_interval_ms.max(MIN_FLASH_INTERVAL_MS));
         match self.last_flash {
             Some((at, shown)) if ctx.now_ms < at.saturating_add(interval) => {
@@ -539,13 +553,18 @@ impl Engine {
                     if spec.kind > deferred.spec.kind {
                         deferred.spec = spec;
                     }
+                    Requested::Queued
                 } else if spec.kind > shown {
                     self.deferred = Some(Deferred { at_ms: at + interval, spec });
+                    Requested::Queued
+                } else {
+                    Requested::Covered
                 }
             }
             _ => {
                 self.last_flash = Some((ctx.now_ms, spec.kind));
                 out.push(Action::Flash(spec));
+                Requested::Shown
             }
         }
     }
@@ -555,7 +574,7 @@ impl Engine {
             return;
         }
         let Some(deferred) = self.deferred.take() else { return };
-        if !self.enabled || self.paused(ctx) || self.quiet(ctx) || self.away {
+        if !self.enabled || self.paused(ctx) || self.quiet(ctx) || self.away || self.focused_skip(ctx) {
             return;
         }
         self.last_flash = Some((ctx.now_ms, deferred.spec.kind));
@@ -588,11 +607,16 @@ impl Engine {
         }
     }
 
-    /// On return, one flash for the most important thing: something still waiting
-    /// outranks something that merely happened while the user was gone.
+    /// On return, one flash in the colour of the most urgent signal among the waits
+    /// still open and the signals that arrived while the user was gone.
     fn welcome_back(&mut self, ctx: &Context, out: &mut Vec<Action>) {
         let digest = std::mem::take(&mut self.digest);
-        if !self.config.presence.digest_on_return || !self.enabled || self.paused(ctx) || self.quiet(ctx) {
+        if !self.config.presence.digest_on_return
+            || !self.enabled
+            || self.paused(ctx)
+            || self.quiet(ctx)
+            || self.focused_skip(ctx)
+        {
             return;
         }
         let pending = self.waiting(ctx).into_iter().next();
@@ -608,14 +632,17 @@ impl Engine {
         }
         record.detail = Some(detail.join("; "));
         let spec = self.flash_spec(kind, self.config.signal(kind));
-        self.request_flash(spec, ctx, out);
-        record.delivered.push(Channel::Flash);
+        if self.request_flash(spec, ctx, out) != Requested::Covered {
+            record.delivered.push(Channel::Flash);
+        }
         out.push(Action::Record(record));
     }
 
     fn remind(&mut self, ctx: &Context, out: &mut Vec<Action>) {
         let every = self.config.flash.remind_after.ms();
-        if every == 0 || self.away || !self.enabled || self.paused(ctx) || self.quiet(ctx) {
+        // Returning early leaves each wait's reminder due, so it flashes once nothing
+        // stands in the way.
+        if every == 0 || self.away || !self.enabled || self.paused(ctx) || self.quiet(ctx) || self.focused_skip(ctx) {
             return;
         }
         let now = ctx.now_ms;
@@ -641,8 +668,9 @@ impl Engine {
         let mut record = self.record(ctx, "reminder");
         record.kind = Some(kind);
         let spec = self.flash_spec(kind, self.config.signal(kind));
-        self.request_flash(spec, ctx, out);
-        record.delivered.push(Channel::Flash);
+        if self.request_flash(spec, ctx, out) != Requested::Covered {
+            record.delivered.push(Channel::Flash);
+        }
         out.push(Action::Record(record));
     }
 
