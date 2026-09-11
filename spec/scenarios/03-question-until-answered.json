@@ -1,0 +1,19 @@
+{
+  "title": "AskUserQuestion flashes blue and stays outstanding until it is answered",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    {
+      "at": "5s",
+      "hook": { "hook_event_name": "PreToolUse", "session_id": "s1", "cwd": "/work/app", "tool_name": "AskUserQuestion", "tool_use_id": "q1" },
+      "expect": ["flash question"],
+      "flash_colors": ["#08A9FF"],
+      "waiting": 1
+    },
+    {
+      "at": "40s",
+      "hook": { "hook_event_name": "PostToolUse", "session_id": "s1", "cwd": "/work/app", "tool_name": "AskUserQuestion", "tool_use_id": "q1" },
+      "expect": [],
+      "waiting": 0
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "title": "Quiet hours wrap past midnight",
+  "config": "[quiet_hours]\nstart = \"22:00\"\nend = \"08:00\"\n",
+  "start": "2026-09-10T21:00:00Z",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    { "at": "30m", "note": "21:30", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["flash done"] },
+    { "at": "1h30m", "note": "22:30", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["suppressed quiet_hours"] },
+    { "at": "11h", "note": "08:00 the next morning, when quiet hours end", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["flash done"] }
+  ]
+}

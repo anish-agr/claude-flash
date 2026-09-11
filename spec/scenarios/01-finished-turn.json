@@ -1,0 +1,8 @@
+{
+  "title": "A finished turn in a session you typed into flashes green",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" }, "expect": [] },
+    { "at": "30s", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["flash done"] },
+    { "at": "31s", "tick": true, "expect": [] }
+  ]
+}

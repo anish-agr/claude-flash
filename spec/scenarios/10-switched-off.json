@@ -1,0 +1,16 @@
+{
+  "title": "Switched off means silent, until switched back on",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    { "at": "1s", "control": "disable", "expect": [] },
+    { "at": "5s", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["suppressed disabled"] },
+    {
+      "at": "5500ms",
+      "hook": { "hook_event_name": "PermissionRequest", "session_id": "s1", "cwd": "/work/app", "tool_name": "Bash", "tool_use_id": "t1" },
+      "expect": ["suppressed disabled"],
+      "waiting": 1
+    },
+    { "at": "6s", "control": "enable", "expect": [] },
+    { "at": "10s", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["flash done"], "waiting": 0 }
+  ]
+}

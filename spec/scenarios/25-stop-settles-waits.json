@@ -1,0 +1,13 @@
+{
+  "title": "A finished turn settles anything it was still waiting on",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    {
+      "at": "1s",
+      "hook": { "hook_event_name": "Notification", "session_id": "s1", "cwd": "/work/app", "notification_type": "agent_needs_input" },
+      "expect": ["flash question"],
+      "waiting": 1
+    },
+    { "at": "30s", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["flash done"], "waiting": 0 }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "title": "Other tools raise signals through the local API, subject to the same rules",
+  "config": "[[project]]\nmatch = \"nightly\"\nmute = true\n",
+  "steps": [
+    {
+      "at": "0s",
+      "note": "API signals have no session, so the background filter does not apply",
+      "signal": { "kind": "done", "title": "Build finished", "source": "make" },
+      "expect": ["flash done"]
+    },
+    { "at": "5s", "signal": { "kind": "error", "source": "ci", "project": "nightly" }, "expect": ["suppressed muted"] },
+    { "at": "10s", "signal": { "kind": "approval", "title": "Deploy to production?", "source": "deploy" }, "expect": ["flash approval"] }
+  ]
+}

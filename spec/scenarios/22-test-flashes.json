@@ -1,0 +1,9 @@
+{
+  "title": "Test flashes still respect the minimum interval, which is a safety limit",
+  "steps": [
+    { "at": "0s", "control": { "pause": "1h" }, "expect": [] },
+    { "at": "1s", "control": { "test": "approval" }, "expect": ["flash approval"] },
+    { "at": "1500ms", "control": { "test": "done" }, "expect": [] },
+    { "at": "3s", "control": { "test": "error" }, "expect": ["flash error"] }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "title": "A signal turned off in the config is not shown, and not listed as waiting",
+  "config": "[signals.approval]\nenabled = false\n",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    {
+      "at": "5s",
+      "hook": { "hook_event_name": "PermissionRequest", "session_id": "s1", "cwd": "/work/app", "tool_name": "Bash", "tool_use_id": "t1" },
+      "expect": ["suppressed signal_off"],
+      "waiting": 0
+    },
+    { "at": "10s", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["flash done"] }
+  ]
+}

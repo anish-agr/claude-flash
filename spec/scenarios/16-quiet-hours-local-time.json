@@ -1,0 +1,11 @@
+{
+  "title": "Quiet hours follow local time, not UTC",
+  "config": "[quiet_hours]\nstart = \"22:00\"\nend = \"08:00\"\n",
+  "start": "2026-09-11T05:30:00Z",
+  "utc_offset_min": -420,
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    { "at": "1m", "note": "22:31 in UTC-7", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["suppressed quiet_hours"] },
+    { "at": "10h", "note": "08:30 in UTC-7", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["flash done"] }
+  ]
+}

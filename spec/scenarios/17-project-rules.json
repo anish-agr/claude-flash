@@ -1,0 +1,24 @@
+{
+  "title": "Project rules mute or recolour by path or folder name, on either platform's paths",
+  "config": "[[project]]\nmatch = \"*/scratch/*\"\nmute = true\n\n[[project]]\nmatch = \"pricetime\"\ncolors = { done = \"#FFD400\" }\n",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/Users/a/scratch/run-17" } },
+    { "at": "5s", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/Users/a/scratch/run-17" }, "expect": ["suppressed muted"] },
+    { "at": "6s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s2", "cwd": "/Users/a/pricetime" } },
+    {
+      "at": "10s",
+      "hook": { "hook_event_name": "Stop", "session_id": "s2", "cwd": "/Users/a/pricetime" },
+      "expect": ["flash done"],
+      "flash_colors": ["#FFD400"]
+    },
+    {
+      "at": "20s",
+      "note": "The rule recolours only the signal it names",
+      "hook": { "hook_event_name": "PermissionRequest", "session_id": "s2", "cwd": "/Users/a/pricetime", "tool_name": "Bash", "tool_use_id": "t1" },
+      "expect": ["flash approval"],
+      "flash_colors": ["#8B2FCE"]
+    },
+    { "at": "30s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s3", "cwd": "C:\\Users\\a\\Scratch\\x" } },
+    { "at": "35s", "note": "Windows paths match the same rule", "hook": { "hook_event_name": "Stop", "session_id": "s3", "cwd": "C:\\Users\\a\\Scratch\\x" }, "expect": ["suppressed muted"] }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "title": "At the lowest permitted interval, no one-second window holds more than three flashes",
+  "config": "[flash]\nmin_interval_ms = 334\n",
+  "steps": [
+    { "at": "0ms", "hook": { "hook_event_name": "Stop", "session_id": "a", "cwd": "/work/app" }, "expect": ["flash done"] },
+    { "at": "333ms", "hook": { "hook_event_name": "Stop", "session_id": "b", "cwd": "/work/app" }, "expect": [] },
+    { "at": "334ms", "hook": { "hook_event_name": "Stop", "session_id": "c", "cwd": "/work/app" }, "expect": ["flash done"] },
+    { "at": "500ms", "hook": { "hook_event_name": "Stop", "session_id": "d", "cwd": "/work/app" }, "expect": [] },
+    { "at": "668ms", "hook": { "hook_event_name": "Stop", "session_id": "e", "cwd": "/work/app" }, "expect": ["flash done"] },
+    { "at": "1001ms", "hook": { "hook_event_name": "Stop", "session_id": "f", "cwd": "/work/app" }, "expect": [] },
+    { "at": "1002ms", "hook": { "hook_event_name": "Stop", "session_id": "g", "cwd": "/work/app" }, "expect": ["flash done"] }
+  ]
+}
