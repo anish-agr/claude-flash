@@ -156,6 +156,7 @@ impl App {
     fn flash(&mut self, spec: &FlashSpec) {
         self.overlay = overlay::Overlay::show(self.mtm, spec);
         if self.overlay.is_none() {
+            log!("could not show a {} flash: no overlay window could be created", spec.kind);
             self.stop_timer();
         } else if self.timer.is_none() {
             // SAFETY: Target implements `tick:`, and the timer keeps it alive.
