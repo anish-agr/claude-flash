@@ -1,0 +1,30 @@
+{
+  "title": "However many events arrive, flashes start at least the minimum interval apart",
+  "steps": [
+    { "at": "0ms", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/a" }, "expect": ["flash done"] },
+    { "at": "50ms", "hook": { "hook_event_name": "Stop", "session_id": "s2", "cwd": "/work/a" }, "expect": [] },
+    { "at": "100ms", "hook": { "hook_event_name": "Stop", "session_id": "s3", "cwd": "/work/a" }, "expect": [] },
+    { "at": "150ms", "hook": { "hook_event_name": "Stop", "session_id": "s4", "cwd": "/work/a" }, "expect": [] },
+    { "at": "200ms", "hook": { "hook_event_name": "Stop", "session_id": "s5", "cwd": "/work/a" }, "expect": [] },
+    { "at": "250ms", "hook": { "hook_event_name": "Stop", "session_id": "s6", "cwd": "/work/a" }, "expect": [] },
+    { "at": "300ms", "hook": { "hook_event_name": "Stop", "session_id": "s7", "cwd": "/work/a" }, "expect": [] },
+    { "at": "350ms", "hook": { "hook_event_name": "Stop", "session_id": "s8", "cwd": "/work/a" }, "expect": [] },
+    {
+      "at": "400ms",
+      "note": "A stronger signal inside the interval is held until the interval ends",
+      "hook": { "hook_event_name": "PermissionRequest", "session_id": "s9", "cwd": "/work/a", "tool_name": "Bash", "tool_use_id": "t" },
+      "expect": []
+    },
+    { "at": "450ms", "hook": { "hook_event_name": "Stop", "session_id": "s10", "cwd": "/work/a" }, "expect": [] },
+    { "at": "999ms", "tick": true, "expect": [] },
+    { "at": "1000ms", "tick": true, "expect": ["flash approval"] },
+    {
+      "at": "1500ms",
+      "note": "A weaker signal inside the next interval is dropped, not queued",
+      "hook": { "hook_event_name": "Stop", "session_id": "s11", "cwd": "/work/a" },
+      "expect": []
+    },
+    { "at": "2000ms", "tick": true, "expect": [] },
+    { "at": "2001ms", "hook": { "hook_event_name": "Stop", "session_id": "s12", "cwd": "/work/a" }, "expect": ["flash done"] }
+  ]
+}

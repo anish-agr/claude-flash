@@ -1,0 +1,22 @@
+{
+  "title": "Reminders repeat while Claude stays blocked, and stop once it is not",
+  "config": "[flash]\nremind_after = \"10m\"\n",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    {
+      "at": "1m",
+      "hook": { "hook_event_name": "PermissionRequest", "session_id": "s1", "cwd": "/work/app", "tool_name": "Bash", "tool_use_id": "t1" },
+      "expect": ["flash approval"]
+    },
+    { "at": "10m59s", "tick": true, "expect": [] },
+    { "at": "11m", "tick": true, "expect": ["flash approval"] },
+    { "at": "15m", "tick": true, "expect": [] },
+    { "at": "21m", "tick": true, "expect": ["flash approval"] },
+    {
+      "at": "21m30s",
+      "hook": { "hook_event_name": "PostToolUse", "session_id": "s1", "cwd": "/work/app", "tool_name": "Bash", "tool_use_id": "t1" },
+      "waiting": 0
+    },
+    { "at": "40m", "tick": true, "expect": [] }
+  ]
+}

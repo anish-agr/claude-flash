@@ -1,0 +1,14 @@
+{
+  "title": "An MCP server asking for input is a question, however Claude Code announces it",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    { "at": "3s", "hook": { "hook_event_name": "Elicitation", "session_id": "s1", "cwd": "/work/app" }, "expect": ["flash question"], "waiting": 1 },
+    {
+      "at": "3500ms",
+      "hook": { "hook_event_name": "Notification", "session_id": "s1", "cwd": "/work/app", "notification_type": "elicitation_dialog" },
+      "expect": ["suppressed duplicate"],
+      "waiting": 1
+    },
+    { "at": "20s", "hook": { "hook_event_name": "ElicitationResult", "session_id": "s1", "cwd": "/work/app" }, "expect": [], "waiting": 0 }
+  ]
+}

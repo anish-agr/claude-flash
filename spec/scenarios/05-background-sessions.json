@@ -1,0 +1,20 @@
+{
+  "title": "Sessions nobody typed into stay silent once a real session is known",
+  "steps": [
+    {
+      "at": "0s",
+      "note": "No interactive session is on record yet, so the engine fails open rather than going silent",
+      "hook": { "hook_event_name": "Stop", "session_id": "agent-1", "cwd": "/work/app" },
+      "expect": ["flash done"]
+    },
+    { "at": "5s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" }, "expect": [] },
+    { "at": "10s", "hook": { "hook_event_name": "Stop", "session_id": "agent-1", "cwd": "/work/app" }, "expect": ["suppressed background"] },
+    { "at": "20s", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["flash done"] },
+    {
+      "at": "21s",
+      "note": "A subagent finishing is not Claude finishing",
+      "hook": { "hook_event_name": "SubagentStop", "session_id": "s1", "cwd": "/work/app" },
+      "expect": []
+    }
+  ]
+}

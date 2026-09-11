@@ -1,0 +1,11 @@
+{
+  "title": "A pause suppresses signals until it expires; a test flash ignores the pause",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    { "at": "1s", "control": { "pause": "15m" }, "expect": [] },
+    { "at": "2m", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["suppressed paused"] },
+    { "at": "3m", "control": { "test": "question" }, "expect": ["flash question"] },
+    { "at": "16m1s", "note": "The pause ran out at 15m1s", "tick": true, "expect": [] },
+    { "at": "17m", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["flash done"] }
+  ]
+}

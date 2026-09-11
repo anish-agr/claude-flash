@@ -1,0 +1,35 @@
+{
+  "title": "While you are away, signals go to notifications and your phone; your return gets one flash",
+  "config": "[push]\nurl = \"https://ntfy.sh/claude-flash-example\"\nafter = \"10m\"\n",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    {
+      "at": "6m",
+      "idle": "6m",
+      "note": "Away for six minutes: notified, but finished turns are not pushed by default",
+      "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" },
+      "expect": ["notify done"]
+    },
+    {
+      "at": "12m",
+      "idle": "12m",
+      "note": "Away past push.after, and approvals are pushed",
+      "hook": { "hook_event_name": "PermissionRequest", "session_id": "s1", "cwd": "/work/app", "tool_name": "Bash", "tool_use_id": "t1" },
+      "expect": ["notify approval", "push approval"],
+      "waiting": 1
+    },
+    {
+      "at": "13m",
+      "idle": "0s",
+      "note": "Back: the still-pending approval outranks the finished turn",
+      "tick": true,
+      "expect": ["flash approval"]
+    },
+    {
+      "at": "14m",
+      "hook": { "hook_event_name": "PostToolUse", "session_id": "s1", "cwd": "/work/app", "tool_name": "Bash", "tool_use_id": "t1" },
+      "expect": [],
+      "waiting": 0
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "title": "A turn that ends in an API error flashes red",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    {
+      "at": "8s",
+      "hook": { "hook_event_name": "StopFailure", "session_id": "s1", "cwd": "/work/app" },
+      "expect": ["flash error"],
+      "flash_colors": ["#FF3B30"]
+    }
+  ]
+}

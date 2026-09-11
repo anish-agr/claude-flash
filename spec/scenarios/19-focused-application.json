@@ -1,0 +1,9 @@
+{
+  "title": "No flash while you are already looking at a listed application",
+  "config": "[flash]\nskip_when_focused = [\"WindowsTerminal\"]\n",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    { "at": "5s", "focused": "WindowsTerminal.exe", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["suppressed focused"] },
+    { "at": "20s", "focused": "chrome", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["flash done"] }
+  ]
+}

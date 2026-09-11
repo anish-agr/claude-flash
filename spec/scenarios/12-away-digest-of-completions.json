@@ -1,0 +1,11 @@
+{
+  "title": "Turns that finished while you were away earn a single flash when you return",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/a" } },
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s2", "cwd": "/work/b" } },
+    { "at": "10m", "idle": "10m", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/a" }, "expect": ["notify done"] },
+    { "at": "11m", "idle": "11m", "hook": { "hook_event_name": "Stop", "session_id": "s2", "cwd": "/work/b" }, "expect": ["notify done"] },
+    { "at": "11m30s", "idle": "0s", "tick": true, "expect": ["flash done"] },
+    { "at": "12m", "tick": true, "expect": [] }
+  ]
+}

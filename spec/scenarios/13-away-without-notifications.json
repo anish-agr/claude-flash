@@ -1,0 +1,9 @@
+{
+  "title": "With away notifications and the return digest turned off, being away is silent",
+  "config": "[presence]\nnotify_when_away = false\ndigest_on_return = false\n",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    { "at": "10m", "idle": "10m", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": [] },
+    { "at": "11m", "idle": "0s", "tick": true, "expect": [] }
+  ]
+}

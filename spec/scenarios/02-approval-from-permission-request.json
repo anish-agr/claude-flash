@@ -1,0 +1,26 @@
+{
+  "title": "A permission dialog flashes purple, and its wait ends when the tool runs",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" }, "expect": [] },
+    {
+      "at": "2s",
+      "note": "PreToolUse for an ordinary tool arrives before the permission check and signals nothing",
+      "hook": { "hook_event_name": "PreToolUse", "session_id": "s1", "cwd": "/work/app", "tool_name": "Bash", "tool_use_id": "t1" },
+      "expect": []
+    },
+    {
+      "at": "2100ms",
+      "hook": { "hook_event_name": "PermissionRequest", "session_id": "s1", "cwd": "/work/app", "tool_name": "Bash", "tool_use_id": "t1" },
+      "expect": ["flash approval"],
+      "flash_colors": ["#8B2FCE"],
+      "waiting": 1
+    },
+    {
+      "at": "9s",
+      "hook": { "hook_event_name": "PostToolUse", "session_id": "s1", "cwd": "/work/app", "tool_name": "Bash", "tool_use_id": "t1" },
+      "expect": [],
+      "waiting": 0
+    },
+    { "at": "12s", "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" }, "expect": ["flash done"] }
+  ]
+}
