@@ -211,7 +211,7 @@ pub fn record_line(record: &Record, with_date: bool) -> String {
         Some(kind) => style::kind(kind, &format!("{:<9}", kind.as_str())),
         None => format!("{:<9}", event_label(&record.event)),
     };
-    let mut line = format!("{}  {what} {:<30}", style::dim(&when), outcome(record));
+    let mut line = format!("{}  {what} {:<30} ", style::dim(&when), outcome(record));
     let context: Vec<&str> = [record.project.as_deref(), record.tool.as_deref(), record.detail.as_deref()]
         .into_iter()
         .flatten()
@@ -354,7 +354,7 @@ pub fn stats(env: &Env, since: &str, json: bool) -> Outcome {
     );
     println!();
     println!("{}{}", label("by hour"), sparkline(&summary.hours));
-    println!("{}{}", label(""), style::dim("0     6     12    18    23"));
+    println!("{}{}", label(""), style::dim("0     6     12    18   23"));
 
     if !summary.projects.is_empty() {
         println!();
