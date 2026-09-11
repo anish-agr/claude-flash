@@ -115,6 +115,9 @@ fn window_for(mtm: MainThreadMarker, screen: &NSScreen, spec: &FlashSpec) -> Opt
             | NSWindowCollectionBehavior::Stationary
             | NSWindowCollectionBehavior::IgnoresCycle,
     );
+    // While a window sits at the normal level, AppKit keeps it clear of the menu bar
+    // and the Dock. Now that it is above both, the screen's own frame fits.
+    window.setFrame_display(frame, false);
     let view = NSImageView::imageViewWithImage(&image, mtm);
     view.setImageScaling(NSImageScaling::ScaleAxesIndependently);
     let view: &NSView = &view;
