@@ -1,5 +1,8 @@
 # How it works
 
+[README](../README.md) · [Configuration](configuration.md) ·
+[Local API](api.md) · [Security](../SECURITY.md)
+
 ## Components
 
 Claude Flash is a Rust workspace with two crates.

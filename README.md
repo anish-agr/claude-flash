@@ -22,22 +22,16 @@ through, and pressing a key or clicking fades it early.
 Approval fires only when Claude Code actually shows a permission dialog. Calls
 allowed by your permission mode or your rules never flash.
 
-## Features
+A question or an approval stays open until Claude moves on, so `flash status`, the
+tray icon and the menu bar item can say what Claude is blocked on and for how
+long. A session raises signals only once a prompt has been submitted in it, which
+keeps subagents and sessions you are not driving quiet. After five minutes without
+keyboard or mouse input the flashes become desktop notifications, and the first
+flash after you come back reports what you missed.
 
-- **Knows what is still waiting.** A question or an approval stays open until
-  Claude moves on. `flash status`, the tray icon and the menu bar item show what
-  Claude is blocked on, and for how long.
-- **Ignores background work.** Only sessions you typed a prompt into can flash, so
-  subagents and scripted runs stay quiet.
-- **Notices when you are away.** After five minutes without keyboard or mouse
-  input, signals become desktop notifications, and can be pushed to your phone.
-  When you return, one flash shows the most important thing that happened.
-- **Keeps a journal.** `flash log`, `flash watch` and `flash stats` show what needed
-  you and how long Claude waited.
-- **Takes signals from anything.** Builds, test runs and other tools can raise the
-  same signals with `flash signal`.
-- **Changes apply live.** Colours, opacity, timing, quiet hours, per-project rules
-  and reminders live in one commented file that the agent reloads within a second.
+[Install](#install) · [Commands](#usage) ·
+[Configuration](docs/configuration.md) · [How it works](docs/how-it-works.md) ·
+[Local API](docs/api.md)
 
 ## Install
 
@@ -97,11 +91,7 @@ flash install --bin-dir ~/.cargo/bin
 5. Starts the agent.
 
 Claude Code reads hooks when a session starts, so restart sessions that are
-already open. Then look at each signal:
-
-```bash
-flash test
-```
+already open, then see [Check it works](#check-it-works).
 
 | Option | Effect |
 |---|---|
@@ -112,6 +102,53 @@ flash test
 
 `flash uninstall` removes the hooks and the login item and stops the agent.
 `flash uninstall --purge` also deletes the settings and the journal.
+
+## Check it works
+
+`flash test` shows the four flashes on their own:
+
+```bash
+flash test
+```
+
+For the whole path, start a session and give Claude something short to do:
+
+```bash
+claude -p "Reply with just: ok"
+```
+
+The screen flashes green when the turn ends, and the journal says what arrived:
+
+```text
+$ flash log --since 15m
+15:05:08  done      held back: background session  claude-flash
+15:10:19  done      flash                          claude-flash
+15:14:43  done      flash                          terminal-check
+```
+
+The column after the signal is what became of it, so a flash you expected and did
+not see has its reason next to it. `--all` adds prompts and session starts and
+ends, which is the quickest way to tell a session that never reached the agent
+from one that was held back.
+
+An approval flash needs a tool call your permission rules do not already allow;
+leave the dialog open and `flash status` counts the wait while it stands. `flash
+signal error --title "Build failed"` raises a red flash without waiting for an API
+failure.
+
+`flash doctor` checks the parts rather than the path, and says how to fix whatever
+it finds:
+
+```text
+$ flash doctor
+Claude Flash 2.0.0
+✓ agent     running · pid 33972 · 127.0.0.1:47823
+✓ settings  ~\AppData\Local\ClaudeFlash\config.toml
+✓ hooks     13 events · ~\.claude\settings.json
+✓ at login  ~\AppData\Local\Microsoft\WindowsApps\flash-agent.exe
+✓ activity  last hook event PostToolUse 48s ago
+✓ journal   ~\AppData\Local\ClaudeFlash\journal · 2 KB · kept 30 days
+```
 
 ## Usage
 
@@ -277,7 +314,16 @@ and Linux. Flashes never start less than 334 ms apart, so no burst of events can
 exceed three flashes per second (WCAG 2.3.1), and a more urgent signal that
 arrives during a flash is shown when the interval ends rather than dropped.
 
-[docs/how-it-works.md](docs/how-it-works.md) covers the rest.
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [docs/how-it-works.md](docs/how-it-works.md) | The hooks, the policy engine, and how a flash is drawn on each platform |
+| [docs/configuration.md](docs/configuration.md) | Every setting, its default and what it accepts |
+| [docs/api.md](docs/api.md) | The local HTTP API: admission, the token and every endpoint |
+| [SECURITY.md](SECURITY.md) | What the agent exposes, what the journal stores, how to report a problem |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | The layout, the checks, and how behaviour changes are made |
+| [CHANGELOG.md](CHANGELOG.md) | What changed in each version |
 
 ## Privacy and security
 
@@ -298,8 +344,9 @@ Details are in [SECURITY.md](SECURITY.md).
 | Windows 10 (1803 or later) and Windows 11 | Overlays on every monitor, tray icon, notifications |
 | macOS 11 or later, Apple silicon and Intel | Overlays on every display and Space, menu bar item, notifications |
 | Linux | Agent and CLI, with notifications through `notify-send`; no overlay |
-| Claude Code in a terminal, the desktop app or an IDE | Supported; all of them read `~/.claude/settings.json`. Tested with Claude Code 2.1.231 |
-| Claude Code on the web | Not supported: its hooks run on a remote machine |
+| Claude Code in a terminal, the desktop app or an IDE extension | One install covers all of them: they read the same `~/.claude/settings.json`. Tested with Claude Code 2.1.231 |
+| Claude Code on the web, or over SSH | Not reached. Hooks run on the machine Claude Code itself runs on |
+| Claude Code in WSL | Its hooks run inside WSL, against WSL's own `~/.claude/settings.json`. Install the Linux build there for notifications; the Windows agent listens on loopback, which WSL's default networking cannot reach |
 | Exclusive full-screen games | Overlays do not appear above them; borderless full screen works |
 
 ## Troubleshooting
