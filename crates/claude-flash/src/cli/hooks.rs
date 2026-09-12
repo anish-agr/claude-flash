@@ -5,7 +5,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use clap::Subcommand;
-use flash_core::settings::{self, Change, Install};
+use flash_core::settings::{self, Change, Install, RemoteAgent};
 use serde_json::Value;
 
 use super::{Env, Outcome, style};
@@ -34,6 +34,11 @@ pub enum HooksAction {
         #[arg(long)]
         settings: Option<PathBuf>,
     },
+    /// Print hooks for another machine, such as WSL, that point at this agent
+    Remote {
+        /// This machine, as the other one reaches it: an address or a host name
+        host: String,
+    },
 }
 
 pub fn run(env: &Env, action: HooksAction) -> Outcome {
@@ -55,14 +60,38 @@ pub fn run(env: &Env, action: HooksAction) -> Outcome {
             let path = settings.unwrap_or_else(paths::claude_settings);
             println!("{}  {}", paths::display(&path), inspect(&path, env.port()));
         }
+        HooksAction::Remote { host } => remote(env, &host)?,
     }
+    Ok(())
+}
+
+/// Prints a `settings.json` for Claude Code on another machine, with hooks that
+/// reach this agent and carry its token. Claude Flash itself is not needed there.
+fn remote(env: &Env, host: &str) -> Outcome {
+    let token = store::read_token(&env.paths.token_file())
+        .ok_or("there is no token yet; start the agent once with `flash agent start`")?;
+    let url = format!("http://{host}:{}", env.port());
+    let spec = Install { port: env.port(), program: String::new(), remote: Some(RemoteAgent { url, token }) };
+    let change = settings::install(None, &spec).map_err(|e| e.to_string())?;
+    // The settings go to stdout so they can be redirected to a file; everything the
+    // reader has to do about it goes to stderr.
+    println!("{}", change.text);
+    if !env.config.agent.remote {
+        eprintln!(
+            "{} this agent still listens on loopback only. Run `flash config set agent.remote true` and restart it,",
+            style::yellow("note:")
+        );
+        eprintln!("      or the other machine cannot reach it.");
+    }
+    eprintln!("Merge the hooks above into ~/.claude/settings.json on the other machine.");
+    eprintln!("They carry this agent's token, so treat that file as a secret.");
     Ok(())
 }
 
 /// Installs the hooks in `path`, keeping a copy of the previous file.
 pub fn install(path: &Path, program: &Path, port: u16, dry_run: bool) -> Result<Change, String> {
     let original = read(path)?;
-    let spec = Install { port, program: program.display().to_string() };
+    let spec = Install { port, program: program.display().to_string(), remote: None };
     let change = settings::install(original.as_deref(), &spec).map_err(|e| e.to_string())?;
     if change.changed && !dry_run {
         write(path, original.as_deref(), &change.text)?;
@@ -139,7 +168,7 @@ pub fn inspect(path: &Path, port: u16) -> String {
         Err(e) => return style::red(&e),
     };
     let program = installed_program(&text);
-    let spec = Install { port, program: program.clone().unwrap_or_default() };
+    let spec = Install { port, program: program.clone().unwrap_or_default(), remote: None };
     match settings::inspect(&text, &spec) {
         Err(e) => style::red(&e.to_string()),
         Ok(_) if settings::hooks_disabled(&text) => style::red("installed, but disableAllHooks turns every hook off"),
@@ -166,7 +195,7 @@ mod tests {
 
     #[test]
     fn finds_the_program_the_session_start_hook_runs() {
-        let spec = Install { port: 47_823, program: "/opt/flash/bin/flash".into() };
+        let spec = Install { port: 47_823, program: "/opt/flash/bin/flash".into(), remote: None };
         let text = settings::install(None, &spec).unwrap().text;
         assert_eq!(installed_program(&text).as_deref(), Some("/opt/flash/bin/flash"));
         assert_eq!(installed_program("{}"), None);

@@ -162,6 +162,7 @@ Signals raised through the API are matched by their `project` field, or by
 | Key | Default | Meaning |
 |---|---|---|
 | `port` | `47823` | The agent's loopback port. The installed hooks include it, so after changing it run `flash hooks install` and `flash agent restart` |
+| `remote` | `false` | Take events from other machines, such as Claude Code in WSL or over SSH. The agent listens on every interface instead of loopback, and the token becomes necessary on every request, hook events included. `flash hooks remote HOST` prints the hooks to install on the other machine. Restart the agent after changing this |
 
 ## `[journal]`
 

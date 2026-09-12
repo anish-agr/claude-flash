@@ -242,11 +242,17 @@ pub enum Rejection {
 /// POSTs and `Sec-Fetch-*` to every request, and cannot suppress either, while
 /// command-line clients send neither. DNS rebinding is closed by requiring the
 /// `Host` header to name loopback rather than an attacker's domain.
-pub fn admit(request: &Request, port: u16) -> Result<(), Rejection> {
+pub fn admit(request: &Request, port: u16, loopback_only: bool) -> Result<(), Rejection> {
     if request.header("origin").is_some()
         || request.headers.iter().any(|(k, _)| k.to_ascii_lowercase().starts_with("sec-fetch-"))
     {
         return Err(Rejection::FromBrowser);
+    }
+    // An agent that listens beyond loopback is addressed by whatever name the client
+    // used, so the Host header settles nothing. The token guards every route there,
+    // including the hook endpoint, and browsers are already out.
+    if !loopback_only {
+        return Ok(());
     }
     let host = request.header("host").ok_or(Rejection::ForeignHost)?;
     let allowed = [format!("127.0.0.1:{port}"), format!("localhost:{port}"), format!("[::1]:{port}")];
@@ -349,21 +355,34 @@ mod tests {
     #[test]
     fn admits_command_line_clients_on_loopback_names() {
         for host in ["127.0.0.1:47823", "localhost:47823", "LOCALHOST:47823", "[::1]:47823"] {
-            assert_eq!(admit(&with_headers(&[("Host", host)]), 47823), Ok(()), "{host}");
+            assert_eq!(admit(&with_headers(&[("Host", host)]), 47823, true), Ok(()), "{host}");
         }
     }
 
     #[test]
-    fn refuses_rebinding_and_browsers() {
-        assert_eq!(admit(&with_headers(&[("Host", "evil.example:47823")]), 47823), Err(Rejection::ForeignHost));
-        assert_eq!(admit(&with_headers(&[("Host", "127.0.0.1:1")]), 47823), Err(Rejection::ForeignHost));
-        assert_eq!(admit(&with_headers(&[]), 47823), Err(Rejection::ForeignHost));
+    fn an_agent_beyond_loopback_answers_to_any_name_but_never_to_a_browser() {
+        // It is addressed by whatever name the other machine used, so the Host header
+        // decides nothing there; the token guards every route instead.
+        assert_eq!(admit(&with_headers(&[("Host", "192.168.1.5:47823")]), 47823, false), Ok(()));
+        assert_eq!(admit(&with_headers(&[("Host", "desktop.local:47823")]), 47823, false), Ok(()));
+        assert_eq!(admit(&with_headers(&[]), 47823, false), Ok(()));
         assert_eq!(
-            admit(&with_headers(&[("Host", "127.0.0.1:47823"), ("Origin", "https://evil.example")]), 47823),
+            admit(&with_headers(&[("Host", "192.168.1.5:47823"), ("Origin", "https://evil.example")]), 47823, false),
+            Err(Rejection::FromBrowser)
+        );
+    }
+
+    #[test]
+    fn refuses_rebinding_and_browsers() {
+        assert_eq!(admit(&with_headers(&[("Host", "evil.example:47823")]), 47823, true), Err(Rejection::ForeignHost));
+        assert_eq!(admit(&with_headers(&[("Host", "127.0.0.1:1")]), 47823, true), Err(Rejection::ForeignHost));
+        assert_eq!(admit(&with_headers(&[]), 47823, true), Err(Rejection::ForeignHost));
+        assert_eq!(
+            admit(&with_headers(&[("Host", "127.0.0.1:47823"), ("Origin", "https://evil.example")]), 47823, true),
             Err(Rejection::FromBrowser)
         );
         assert_eq!(
-            admit(&with_headers(&[("Host", "127.0.0.1:47823"), ("Sec-Fetch-Mode", "no-cors")]), 47823),
+            admit(&with_headers(&[("Host", "127.0.0.1:47823"), ("Sec-Fetch-Mode", "no-cors")]), 47823, true),
             Err(Rejection::FromBrowser)
         );
     }

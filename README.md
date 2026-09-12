@@ -176,6 +176,7 @@ config    ~\AppData\Local\ClaudeFlash\config.toml
 | `flash run -- COMMAND` | Run a command and signal whether it passed, keeping its exit code |
 | `flash config get KEY`, `set KEY VALUE`, `edit` | Read or change settings |
 | `flash hooks install`, `uninstall`, `status` | Manage the hooks in `settings.json` |
+| `flash hooks remote HOST` | Print hooks for another machine that point at this agent |
 | `flash agent start`, `stop`, `restart`, `logs` | Manage the background agent |
 | `flash doctor` | Check every part of the setup |
 | `flash completions SHELL` | Print a completion script for bash, zsh, fish, PowerShell or elvish |
@@ -233,6 +234,38 @@ flash signal done --title "Deploy finished"
 These follow the same rules as signals from Claude Code: a pause, quiet hours,
 project rules and presence all apply. Other programs can call the local HTTP API
 directly; see [docs/api.md](docs/api.md).
+
+### From another machine
+
+Claude Code in WSL, over SSH or on a second computer runs its hooks there, and
+reads that machine's own `~/.claude/settings.json`. Those hooks can still flash
+this screen. First let the agent take events from outside, which also makes the
+token necessary on every request, hook events included:
+
+```bash
+flash config set agent.remote true
+```
+
+```bash
+flash agent restart
+```
+
+Then print hooks for the other machine, naming this one as that machine reaches
+it:
+
+```bash
+flash hooks remote 192.168.1.5
+```
+
+The settings go to standard output; merge them into `~/.claude/settings.json` over
+there. Claude Flash does not need to be installed on that machine, because the
+hooks are plain HTTP. They carry this agent's token, so treat that file as a
+secret.
+
+Windows asks to allow the agent through the firewall the first time it listens
+this way. Inside WSL, `127.0.0.1` means WSL itself; the Windows host is the
+default gateway, which `ip route show default | awk '{print $3}'` prints. With
+WSL's mirrored networking, `127.0.0.1` reaches the host directly.
 
 ### Scripted runs
 
@@ -359,8 +392,8 @@ Details are in [SECURITY.md](SECURITY.md).
 | macOS 11 or later, Apple silicon and Intel | Overlays on every display and Space, menu bar item, notifications |
 | Linux | Agent and CLI, with notifications through `notify-send`; no overlay |
 | Claude Code in a terminal, the desktop app or an IDE extension | One install covers all of them: they read the same `~/.claude/settings.json`. Tested with Claude Code 2.1.231 |
-| Claude Code on the web, or over SSH | Not reached. Hooks run on the machine Claude Code itself runs on |
-| Claude Code in WSL | Its hooks run inside WSL, against WSL's own `~/.claude/settings.json`. Install the Linux build there for notifications; the Windows agent listens on loopback, which WSL's default networking cannot reach |
+| Claude Code on the web | Not reached: its hooks run on a machine you do not control |
+| Claude Code in WSL, over SSH, or on another machine | Its hooks run there, against that machine's own `~/.claude/settings.json`. They can still flash this desktop: see [From another machine](#from-another-machine) |
 | Exclusive full-screen games | Overlays do not appear above them; borderless full screen works |
 
 ## Troubleshooting

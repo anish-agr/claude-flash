@@ -42,6 +42,27 @@ pub struct Install {
     /// Absolute path of the `flash` executable, which every session runs once at
     /// start as `flash agent ensure`.
     pub program: String,
+    /// Set when the hooks point at an agent on another machine, which has nothing
+    /// local to start and wants its token on every event.
+    pub remote: Option<RemoteAgent>,
+}
+
+/// An agent reachable over the network, and the token that admits a request to it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RemoteAgent {
+    /// Base URL, such as `http://192.168.1.5:47823`.
+    pub url: String,
+    pub token: String,
+}
+
+impl Install {
+    /// Where hook events are sent.
+    fn url(&self) -> String {
+        match &self.remote {
+            Some(remote) => format!("{}{INGRESS_PATH}", remote.url.trim_end_matches('/')),
+            None => ingress_url(self.port),
+        }
+    }
 }
 
 pub fn ingress_url(port: u16) -> String {
@@ -210,15 +231,20 @@ fn desired_group(event: &str, matcher: Option<&str>, spec: &Install) -> Value {
     // when a session starts, and the hooks for one event run in parallel, so an HTTP
     // hook here would race the command that starts it. The command forwards the
     // event itself once the agent is listening.
-    let hook = if event == "SessionStart" {
+    // A remote agent has nothing here to start, so it takes SessionStart over HTTP
+    // like every other event.
+    let hook = if event == "SessionStart" && spec.remote.is_none() {
         json!({"type": "command", "command": spec.program, "args": ["agent", "ensure"], "timeout": 30})
     } else {
         let mut headers = Map::new();
         headers.insert(MARKER_HEADER.into(), HOOK_VERSION.into());
         headers.insert(SESSION_HEADER.into(), format!("${{{SESSION_ENV_VAR}}}").into());
+        if let Some(remote) = &spec.remote {
+            headers.insert("Authorization".into(), format!("Bearer {}", remote.token).into());
+        }
         json!({
             "type": "http",
-            "url": ingress_url(spec.port),
+            "url": spec.url(),
             "timeout": 5,
             "headers": headers,
             "allowedEnvVars": [SESSION_ENV_VAR],
@@ -301,7 +327,7 @@ mod tests {
     use super::*;
 
     fn spec() -> Install {
-        Install { port: 47_823, program: r"C:\Program Files\Claude Flash\flash.exe".into() }
+        Install { port: 47_823, program: r"C:\Program Files\Claude Flash\flash.exe".into(), remote: None }
     }
 
     /// Shaped like a real file: another tool's hooks around a v1 Claude Flash hook.
@@ -349,6 +375,20 @@ mod tests {
 
     fn parse(text: &str) -> Value {
         serde_json::from_str(text).unwrap()
+    }
+
+    #[test]
+    fn hooks_for_another_machine_carry_the_token_and_start_nothing_locally() {
+        let remote = RemoteAgent { url: "http://192.168.1.5:47823/".into(), token: "9f3a".into() };
+        let spec = Install { remote: Some(remote), ..spec() };
+        let v = parse(&install(None, &spec).unwrap().text);
+        let session_start = &v["hooks"]["SessionStart"][0]["hooks"][0];
+        assert_eq!(session_start["type"], "http", "there is no agent on that machine to start");
+        for hook in [session_start, &v["hooks"]["Stop"][0]["hooks"][0]] {
+            assert_eq!(hook["url"], "http://192.168.1.5:47823/v1/hooks/claude-code", "one slash, not two");
+            assert_eq!(hook["headers"]["Authorization"], "Bearer 9f3a");
+            assert_eq!(hook["headers"][MARKER_HEADER], HOOK_VERSION);
+        }
     }
 
     #[test]

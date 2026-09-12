@@ -11,6 +11,10 @@ Notable changes to Claude Flash. The format follows
 - `flash run -- COMMAND` runs a command and raises a signal for how it went, then
   exits with the command's own code. `--only-errors` reports only failures. It
   replaces the `&&`/`||` pair, which PowerShell 5.1 cannot run.
+- `agent.remote` lets Claude Code in WSL, over SSH or on another machine flash this
+  desktop. The agent listens on every interface and requires the token on every
+  request, hook events included, and `flash hooks remote HOST` prints the hooks to
+  merge into `settings.json` over there.
 
 ## [2.0.0] - 2026-09-11
 

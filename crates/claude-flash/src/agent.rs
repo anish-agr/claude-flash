@@ -8,7 +8,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use flash_core::config::Config;
+use flash_core::config::{Agent, Config};
 
 use crate::api::Control;
 use crate::client::Client;
@@ -64,9 +64,14 @@ pub fn run(options: Options) -> ExitCode {
         log!("panic: {info}");
         report(info);
     }));
-    let port = options.port.unwrap_or_else(|| configured_port(&paths));
+    let settings = configured_agent(&paths);
+    let port = options.port.unwrap_or(settings.port);
+    // Loopback keeps the agent on this machine. Listening wider is what lets Claude
+    // Code in WSL or on another machine reach it, and the token then guards
+    // everything, so a wider address is never a quieter door.
+    let address = if settings.remote { Ipv4Addr::UNSPECIFIED } else { Ipv4Addr::LOCALHOST };
 
-    let listener = match TcpListener::bind((Ipv4Addr::LOCALHOST, port)) {
+    let listener = match TcpListener::bind((address, port)) {
         Ok(listener) => listener,
         Err(e) => return step_aside(&paths, port, &options, &e),
     };
@@ -88,6 +93,7 @@ pub fn run(options: Options) -> ExitCode {
         listener,
         port,
         token,
+        loopback_only: !settings.remote,
         requests: requests.clone(),
         hub: Arc::clone(&hub),
         shared: Arc::clone(&shared),
@@ -104,11 +110,11 @@ pub fn run(options: Options) -> ExitCode {
     if options.headless { ui::headless::run(native) } else { ui::run_native(native) }
 }
 
-fn configured_port(paths: &Paths) -> u16 {
+fn configured_agent(paths: &Paths) -> Agent {
     fs::read_to_string(paths.config_file())
         .ok()
         .and_then(|text| Config::parse(&text).ok())
-        .map_or_else(|| Config::default().agent.port, |config| config.agent.port)
+        .map_or_else(|| Config::default().agent, |config| config.agent)
 }
 
 /// The port is taken. When another agent holds it, pass on any toggle and exit

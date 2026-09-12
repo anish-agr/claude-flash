@@ -30,6 +30,9 @@ pub struct Server {
     pub listener: TcpListener,
     pub port: u16,
     pub token: String,
+    /// False when the agent listens beyond loopback, which makes the token
+    /// necessary on every route, hook events included.
+    pub loopback_only: bool,
     pub requests: Sender<Request>,
     pub hub: Arc<Hub>,
     pub shared: Arc<Shared>,
@@ -83,7 +86,7 @@ impl Server {
     }
 
     fn route(&self, request: &HttpRequest) -> Vec<u8> {
-        if let Err(rejection) = http::admit(request, self.port) {
+        if let Err(rejection) = http::admit(request, self.port, self.loopback_only) {
             return error(
                 403,
                 match rejection {
@@ -100,6 +103,11 @@ impl Server {
                 api: api::VERSION,
                 pid: std::process::id(),
             }),
+            // Reachable from other machines, so the hook endpoint stops being the one
+            // route that trusts whoever can open a socket.
+            INGRESS_PATH if method == "POST" && !self.loopback_only && !self.authorized(request) => {
+                error(401, "missing or incorrect API token")
+            }
             INGRESS_PATH if method == "POST" => self.hook(request),
             path @ ("/v1/status" | "/v1/control" | "/v1/signal" | "/v1/events") => {
                 if !self.authorized(request) {

@@ -19,6 +19,11 @@ Anything else gets `403`. Browsers always send those headers on the requests a w
 page makes, so no page can use the API, even one on a domain that resolves to
 127.0.0.1.
 
+With `agent.remote = true` the agent listens on every interface, and is addressed
+by whatever name the other machine used, so the `Host` check is dropped: the token
+is then required on every endpoint, including the hook endpoint below. The
+`Origin` and `Sec-Fetch-*` rule still applies.
+
 Requests and responses are HTTP/1.1 with one request per connection. Bodies are
 JSON, up to 512 KB; request heads are limited to 16 KB.
 

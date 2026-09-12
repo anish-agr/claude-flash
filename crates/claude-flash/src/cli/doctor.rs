@@ -53,6 +53,11 @@ pub fn run(env: &Env) -> Outcome {
             "agent",
             format!("version {} is running, but this is {}; run `flash agent restart`", h.version, flash_core::VERSION),
         ),
+        Ok(h) if env.config.agent.remote => report.line(
+            Level::Pass,
+            "agent",
+            format!("running · pid {} · port {} on every interface · token required", h.pid, env.port()),
+        ),
         Ok(h) => report.line(Level::Pass, "agent", format!("running · pid {} · 127.0.0.1:{}", h.pid, env.port())),
         Err(ClientError::NotRunning) => {
             report.line(Level::Fail, "agent", "not running; start it with `flash agent start`")
@@ -159,7 +164,7 @@ fn check_hooks(env: &Env, report: &mut Report) {
         return;
     };
     let program = hooks::installed_program(&text);
-    let spec = Install { port: env.port(), program: program.clone().unwrap_or_default() };
+    let spec = Install { port: env.port(), program: program.clone().unwrap_or_default(), remote: None };
     match settings::inspect(&text, &spec) {
         Err(e) => report.line(Level::Fail, "hooks", e.to_string()),
         Ok(_) if settings::hooks_disabled(&text) => {

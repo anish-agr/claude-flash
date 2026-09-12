@@ -275,13 +275,16 @@ impl ProjectRule {
 #[serde(default, deny_unknown_fields)]
 pub struct Agent {
     pub port: u16,
+    /// Listen on every interface, and require the token on every request, so that
+    /// Claude Code in WSL or on another machine can reach this agent.
+    pub remote: bool,
 }
 
 pub const DEFAULT_PORT: u16 = 47_823;
 
 impl Default for Agent {
     fn default() -> Self {
-        Agent { port: DEFAULT_PORT }
+        Agent { port: DEFAULT_PORT, remote: false }
     }
 }
 
@@ -534,6 +537,10 @@ notify = false
 [agent]
 # Loopback port for the local agent. Run `flash hooks install` after changing it.
 port = 47823
+# Take events from other machines, such as Claude Code in WSL or over SSH. The agent
+# then listens on every interface and the token is required on every request, hook
+# events included. `flash hooks remote` prints what to run on the other machine.
+remote = false
 
 [journal]
 enabled = true
