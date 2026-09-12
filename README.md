@@ -172,6 +172,7 @@ config    ~\AppData\Local\ClaudeFlash\config.toml
 | `flash log --since 6h` | What the journal recorded, including why a signal was held back |
 | `flash stats --since 7d` | Signals, time spent waiting, busiest hours and projects |
 | `flash signal KIND --title TEXT` | Raise a signal from a script |
+| `flash run -- COMMAND` | Run a command and signal whether it passed, keeping its exit code |
 | `flash config get KEY`, `set KEY VALUE`, `edit` | Read or change settings |
 | `flash hooks install`, `uninstall`, `status` | Manage the hooks in `settings.json` |
 | `flash agent start`, `stop`, `restart`, `logs` | Manage the background agent |
@@ -212,8 +213,20 @@ The journal is one JSON object per line, one file per day, kept for 30 days. See
 
 ### Signals from other tools
 
+`flash run` puts a signal on the end of any command: green when it succeeds, red
+when it fails. It exits with the command's own code, so it can sit in front of
+anything without changing what a script or a build server makes of the result.
+
 ```bash
-cargo test && flash signal done --title "Tests passed" || flash signal error --title "Tests failed"
+flash run -- cargo test
+```
+
+That line is the same in PowerShell, which has no `&&` or `||`. `--only-errors`
+says nothing when the command passes, and `--title` replaces the notification
+text. To raise a signal on its own:
+
+```bash
+flash signal done --title "Deploy finished"
 ```
 
 These follow the same rules as signals from Claude Code: a pause, quiet hours,

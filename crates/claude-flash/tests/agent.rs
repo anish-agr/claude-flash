@@ -337,3 +337,26 @@ fn signals_from_other_tools_and_the_event_stream() {
     let summary: Value = serde_json::from_slice(&stats.stdout).unwrap();
     assert_eq!(summary["signals"]["error"]["total"], 1);
 }
+
+#[test]
+fn running_a_command_signals_how_it_went_and_keeps_its_exit_code() {
+    let agent = Agent::start("run");
+    let exe = env!("CARGO_BIN_EXE_flash");
+
+    let passed = agent.flash(&["run", "--", exe, "--version"]);
+    assert!(passed.status.success(), "{}", String::from_utf8_lossy(&passed.stderr));
+    agent.wait_for("the done signal", |a| a.status().today.done == 1);
+
+    let failed = agent.flash(&["run", "--", exe, "--not-a-flag"]);
+    assert_eq!(failed.status.code(), Some(2), "the command's own exit code comes through");
+    agent.wait_for("the error signal", |a| a.status().today.error == 1);
+
+    let run: Vec<Record> = agent.journal().into_iter().filter(|r| r.source.as_deref() == Some("run")).collect();
+    assert_eq!(run.len(), 2);
+    assert_eq!(run[0].kind, Some(Attention::Done));
+    assert_eq!(run[1].kind, Some(Attention::Error));
+
+    let quiet = agent.flash(&["run", "--only-errors", "--", exe, "--version"]);
+    assert!(quiet.status.success());
+    assert_eq!(agent.status().today.done, 1, "--only-errors says nothing about a command that passed");
+}

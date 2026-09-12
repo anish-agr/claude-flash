@@ -4,6 +4,14 @@ Notable changes to Claude Flash. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `flash run -- COMMAND` runs a command and raises a signal for how it went, then
+  exits with the command's own code. `--only-errors` reports only failures. It
+  replaces the `&&`/`||` pair, which PowerShell 5.1 cannot run.
+
 ## [2.0.0] - 2026-09-11
 
 A rewrite in Rust with macOS support, built around a background agent.

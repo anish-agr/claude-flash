@@ -9,9 +9,9 @@ mod report;
 mod style;
 
 use std::fs;
-use std::process::ExitCode;
+use std::process::{Command as Exec, ExitCode};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use flash_core::config::{Config, MIN_FLASH_INTERVAL_MS};
@@ -79,6 +79,21 @@ enum Command {
         /// Project name, matched against [[project]] rules
         #[arg(long)]
         project: Option<String>,
+    },
+    /// Run a command and signal whether it passed, keeping its exit code
+    Run {
+        /// Notification title, used when you are away
+        #[arg(long)]
+        title: Option<String>,
+        /// Project name, matched against [[project]] rules
+        #[arg(long)]
+        project: Option<String>,
+        /// Signal only when the command fails
+        #[arg(long)]
+        only_errors: bool,
+        /// The command, after `--`
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
+        command: Vec<String>,
     },
     /// Follow signals as they happen
     Watch {
@@ -234,6 +249,9 @@ pub fn main() -> ExitCode {
             });
             env.client().signal(&signal).map_err(agent_error)
         }
+        Some(Command::Run { title, project, only_errors, command }) => {
+            return run_command(&env, &command, title, project, only_errors);
+        }
         Some(Command::Watch { json }) => report::watch(&env, json),
         Some(Command::Log { since, kind, project, all, limit, json }) => {
             let filter = report::LogFilter { kind: kind.map(Into::into), project, all, limit };
@@ -299,6 +317,53 @@ fn switch(env: &Env, control: Control) -> Outcome {
         }
         Err(e) => Err(e.to_string()),
     }
+}
+
+/// Runs a command and signals how it went. The command's own exit code is passed
+/// through, so putting `flash run --` in front of something does not change what a
+/// script or a build server makes of it, and a signal that cannot be raised is a
+/// note on stderr rather than a failure.
+fn run_command(
+    env: &Env,
+    command: &[String],
+    title: Option<String>,
+    project: Option<String>,
+    only_errors: bool,
+) -> ExitCode {
+    let Some((program, arguments)) = command.split_first() else {
+        eprintln!("{} give a command to run, as in `flash run -- cargo test`", style::red("error:"));
+        return ExitCode::FAILURE;
+    };
+    let started = Instant::now();
+    let status = match Exec::new(program).args(arguments).status() {
+        Ok(status) => status,
+        Err(e) => {
+            eprintln!("{} could not run {program}: {e}", style::red("error:"));
+            return ExitCode::FAILURE;
+        }
+    };
+    let elapsed = duration::format(started.elapsed().as_millis().try_into().unwrap_or(u64::MAX));
+    let code = status.code().unwrap_or(1);
+    let (kind, outcome) = if status.success() {
+        (Attention::Done, format!("passed in {elapsed}"))
+    } else {
+        (Attention::Error, format!("failed in {elapsed}, exit {code}"))
+    };
+    if !(only_errors && status.success()) {
+        let signal = json!({
+            "kind": kind,
+            "title": title.unwrap_or_else(|| format!("{program} {outcome}")),
+            "body": command.join(" "),
+            "source": "run",
+            "project": project,
+        });
+        if let Err(e) = env.client().signal(&signal) {
+            eprintln!("{} {}", style::dim("no signal:"), agent_error(e));
+        }
+    }
+    // A code that does not fit a byte, or a process killed by a signal, still has to
+    // leave here as a failure.
+    if status.success() { ExitCode::SUCCESS } else { ExitCode::from(u8::try_from(code).unwrap_or(1).max(1)) }
 }
 
 /// The order in which to show the signals when none are named.
