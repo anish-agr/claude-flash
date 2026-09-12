@@ -4,6 +4,13 @@ Notable changes to Claude Flash. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- `flash install` no longer asks you to restart open Claude Code sessions when the
+  hooks were already current. Those sessions reach the new agent as they are.
+
 ## [2.1.0] - 2026-09-11
 
 ### Added

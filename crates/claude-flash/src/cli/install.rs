@@ -56,7 +56,9 @@ pub fn install(env: &Env, args: &InstallArgs) -> Outcome {
     }
     step("settings", &paths::display(&config_path));
 
-    if !args.no_hooks {
+    let hooks_changed = if args.no_hooks {
+        false
+    } else {
         let settings = paths::claude_settings();
         let change = hooks::install(&settings, &flash, env.port(), false)?;
         let detail = if change.changed {
@@ -65,7 +67,8 @@ pub fn install(env: &Env, args: &InstallArgs) -> Outcome {
             format!("already current in {}", paths::display(&settings))
         };
         step("hooks", &detail);
-    }
+        change.changed
+    };
 
     if args.no_autostart {
         if autostart::registered().is_some() {
@@ -86,7 +89,9 @@ pub fn install(env: &Env, args: &InstallArgs) -> Outcome {
 
     println!();
     println!("Claude Flash {} is installed. Run `flash test` to see each signal.", flash_core::VERSION);
-    if !args.no_hooks {
+    // Unchanged hooks send events to the same address, so open sessions reach the new
+    // agent as they are. Only a change needs them restarted.
+    if hooks_changed {
         println!("{}", style::dim("Claude Code sessions that are already open use the new hooks once restarted."));
     }
     if !on_path(&bin_dir) {
