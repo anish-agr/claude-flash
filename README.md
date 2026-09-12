@@ -142,7 +142,7 @@ it finds:
 
 ```text
 $ flash doctor
-Claude Flash 2.0.0
+Claude Flash 2.1.0
 ✓ agent     running · pid 33972 · 127.0.0.1:47823
 ✓ settings  ~\AppData\Local\ClaudeFlash\config.toml
 ✓ hooks     13 events · ~\.claude\settings.json
@@ -155,7 +155,7 @@ Claude Flash 2.0.0
 
 ```text
 $ flash status
-● on  agent 2.0.0 · pid 11208 · up 3h 12m
+● on  agent 2.1.0 · pid 11208 · up 3h 12m
 waiting   approval  Write in claude-flash  1m 20s · session 3aee9676
           question  pricetime  6s · session 91b0c2d4
 today     14 done · 3 questions · 5 approvals · 0 errors · 21 flashes · 4 held back
@@ -376,9 +376,10 @@ arrives during a flash is shown when the interval ends rather than dropped.
 
 ## Privacy and security
 
-- The agent listens on loopback only, and refuses requests from web pages and from
-  hosts that are not loopback. Endpoints that read or change anything need a token
-  kept in the data directory.
+- The agent listens on loopback, and refuses requests from web pages and from hosts
+  that are not loopback. Endpoints that read or change anything need a token kept in
+  the data directory. Turning on `agent.remote` to reach it from another machine
+  makes that token necessary on every request, hook events included.
 - The journal records event names, signal kinds, project folder names, tool names
   and durations. It never records prompts, tool input or output, or Claude's
   replies; those fields are not even read from hook events.

@@ -29,8 +29,9 @@ JSON, up to 512 KB; request heads are limited to 16 KB.
 
 ## Authentication
 
-`/v1/health` and the hook endpoint need no token. Everything else needs the
-bearer token the agent creates in its data directory on first start:
+While the agent is on loopback, `/v1/health` and the hook endpoint need no token;
+with `agent.remote = true` the hook endpoint needs one too. Everything else always
+needs the bearer token the agent creates in its data directory on first start:
 
 | Platform | Token file |
 |---|---|
@@ -81,7 +82,7 @@ Errors are JSON with a message:
 Whether an agent is listening, and which.
 
 ```json
-{ "name": "claude-flash", "version": "2.0.0", "api": 1, "pid": 20412 }
+{ "name": "claude-flash", "version": "2.1.0", "api": 1, "pid": 20412 }
 ```
 
 ## `POST /v1/hooks/claude-code`
@@ -102,7 +103,7 @@ successful hook with no decision.
 
 ```json
 {
-  "version": "2.0.0",
+  "version": "2.1.0",
   "pid": 20412,
   "port": 47823,
   "started": "2026-09-11T08:02:11.304Z",

@@ -140,7 +140,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "claude-flash"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "clap",
  "clap_complete",
@@ -222,7 +222,7 @@ checksum = "3e0f1c7c3a72c66fd80abe965175f7523475c0489a87d3ff9d6e8c87d87a9d2d"
 
 [[package]]
 name = "flash-core"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "png",
  "serde",
