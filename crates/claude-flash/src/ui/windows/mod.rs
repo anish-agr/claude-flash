@@ -5,6 +5,7 @@ mod icons;
 mod menu;
 mod overlay;
 mod probe;
+mod sound;
 mod tray;
 
 use std::cell::RefCell;

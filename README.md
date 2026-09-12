@@ -294,6 +294,8 @@ status` and `flash doctor` say so and the previous settings stay in effect.
 color = "#8B2FCE"
 # To soften a flash, lower its opacity. A lighter colour turns into white haze.
 opacity = 0.2
+# Play this signal's system sound as well.
+sound = true
 
 [flash]
 skip_when_focused = ["WindowsTerminal"]

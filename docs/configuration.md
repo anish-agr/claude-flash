@@ -87,6 +87,7 @@ seconds or minutes.
 | `enabled` | `true` | Whether the signal is shown at all |
 | `color` | `#00FF5A`, `#08A9FF`, `#8B2FCE`, `#FF3B30` | The flash colour |
 | `opacity` | `0.28`, `0.2`, `0.2`, `0.24` | Peak opacity, from 0.02 to 1 |
+| `sound` | `false` | Play a system sound as this signal flashes: on Windows the sound for the matching message kind, on macOS Glass, Ping, Purr or Basso. It follows the volume and sound scheme already set, and Linux has no overlay to play it with |
 
 A translucent tint keeps its hue, while lightness turns into white haze, so a pale
 colour reads as fog rather than as a colour. To make a flash gentler, lower its

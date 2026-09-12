@@ -83,6 +83,8 @@ pub struct SignalStyle {
     pub enabled: bool,
     pub color: Rgb,
     pub opacity: f64,
+    /// Play this signal's system sound alongside the flash.
+    pub sound: bool,
 }
 
 pub const fn builtin(kind: Attention) -> SignalStyle {
@@ -92,7 +94,7 @@ pub const fn builtin(kind: Attention) -> SignalStyle {
         Attention::Approval => (Rgb::new(0x8B, 0x2F, 0xCE), 0.20),
         Attention::Error => (Rgb::new(0xFF, 0x3B, 0x30), 0.24),
     };
-    SignalStyle { enabled: true, color, opacity }
+    SignalStyle { enabled: true, color, opacity, sound: false }
 }
 
 /// One signal's settings as written. Anything left out falls back to [`builtin`],
@@ -106,6 +108,8 @@ pub struct SignalOverride {
     pub color: Option<Rgb>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub opacity: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sound: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -121,7 +125,12 @@ impl Default for Signals {
     fn default() -> Self {
         let full = |kind| {
             let s = builtin(kind);
-            SignalOverride { enabled: Some(s.enabled), color: Some(s.color), opacity: Some(s.opacity) }
+            SignalOverride {
+                enabled: Some(s.enabled),
+                color: Some(s.color),
+                opacity: Some(s.opacity),
+                sound: Some(s.sound),
+            }
         };
         Signals {
             done: full(Attention::Done),
@@ -410,6 +419,7 @@ impl Config {
             enabled: o.enabled.unwrap_or(base.enabled),
             color: o.color.unwrap_or(base.color),
             opacity: o.opacity.unwrap_or(base.opacity),
+            sound: o.sound.unwrap_or(base.sound),
         }
     }
 
@@ -473,25 +483,30 @@ remind_after = "0"
 
 # Each signal can be recoloured, softened with opacity (0.02 to 1), or turned off.
 # To soften a flash, lower its opacity: lightening the colour turns it white instead.
+# With sound on, the signal also plays the system sound this kind maps to.
 [signals.done]
 enabled = true
 color = "#00FF5A"
 opacity = 0.28
+sound = false
 
 [signals.question]
 enabled = true
 color = "#08A9FF"
 opacity = 0.2
+sound = false
 
 [signals.approval]
 enabled = true
 color = "#8B2FCE"
 opacity = 0.2
+sound = false
 
 [signals.error]
 enabled = true
 color = "#FF3B30"
 opacity = 0.24
+sound = false
 
 [sessions]
 # Ignore sessions you never typed a prompt into, such as background agents.
@@ -760,6 +775,14 @@ mod tests {
         assert_eq!(done.color, Rgb::new(0xFF, 0xD4, 0x00));
         assert!((done.opacity - 0.28).abs() < 1e-9);
         assert!(done.enabled);
+    }
+
+    #[test]
+    fn a_signal_stays_silent_until_its_sound_is_turned_on() {
+        assert!(Attention::ALL.iter().all(|k| !Config::default().signal(*k).sound));
+        let c = Config::parse("[signals.error]\nsound = true\n").unwrap();
+        assert!(c.signal(Attention::Error).sound);
+        assert!(!c.signal(Attention::Done).sound, "one signal's sound is not every signal's");
     }
 
     #[test]

@@ -39,6 +39,9 @@ impl Overlay {
         if windows.is_empty() {
             return None;
         }
+        if spec.sound {
+            super::sound::play(spec.kind);
+        }
         let reduce_motion = spec.respect_reduce_motion && probe::reduce_motion();
         for window in &windows {
             window.setAlphaValue(0.0);

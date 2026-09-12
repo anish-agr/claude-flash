@@ -82,6 +82,8 @@ pub struct FlashSpec {
     pub vignette: f32,
     pub timing: Timing,
     pub respect_reduce_motion: bool,
+    /// Play this signal's system sound as the flash starts.
+    pub sound: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -778,6 +780,7 @@ impl Engine {
             vignette: f.vignette as f32,
             timing: f.timing(),
             respect_reduce_motion: f.respect_reduce_motion,
+            sound: style.sound,
         }
     }
 

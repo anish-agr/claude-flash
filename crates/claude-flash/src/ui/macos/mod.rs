@@ -4,6 +4,7 @@
 mod menu;
 mod overlay;
 mod probe;
+mod sound;
 
 use std::cell::RefCell;
 use std::panic::{self, AssertUnwindSafe};
