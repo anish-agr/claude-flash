@@ -101,7 +101,8 @@ already open, then see [Check it works](#check-it-works).
 | `--desktop-toggle` | On Windows, add a desktop shortcut that turns flashes on and off |
 
 `flash uninstall` removes the hooks and the login item and stops the agent.
-`flash uninstall --purge` also deletes the settings and the journal.
+`flash uninstall --purge` also deletes the settings, the journal and the saved
+state.
 
 ## Check it works
 
