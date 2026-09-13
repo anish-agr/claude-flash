@@ -1,7 +1,7 @@
 # Local HTTP API
 
-[README](../README.md) · [How it works](how-it-works.md) ·
-[Configuration](configuration.md) · [Security](../SECURITY.md)
+[README](../README.md) · [Getting started](getting-started.md) ·
+[How it works](how-it-works.md) · [Configuration](configuration.md) · [Security](../SECURITY.md)
 
 The agent serves a small JSON API on loopback. Claude Code's hooks use one endpoint;
 the `flash` CLI uses the rest, and so can any other program.

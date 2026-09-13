@@ -1,7 +1,7 @@
 # How it works
 
-[README](../README.md) · [Configuration](configuration.md) ·
-[Local API](api.md) · [Security](../SECURITY.md)
+[README](../README.md) · [Getting started](getting-started.md) ·
+[Configuration](configuration.md) · [Local API](api.md) · [Security](../SECURITY.md)
 
 ## Components
 

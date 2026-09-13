@@ -29,41 +29,77 @@ keeps subagents and sessions you are not driving quiet. After five minutes witho
 keyboard or mouse input the flashes become desktop notifications, and the first
 flash after you come back reports what you missed.
 
-[Install](#install) · [Commands](#usage) ·
-[Configuration](docs/configuration.md) · [How it works](docs/how-it-works.md) ·
-[Local API](docs/api.md)
+[Install](#install) · [Getting started](docs/getting-started.md) ·
+[Commands](#usage) · [Configuration](docs/configuration.md) ·
+[How it works](docs/how-it-works.md) · [Local API](docs/api.md)
 
 ## Install
 
-### From a release
+Each block is one command.
 
-Download the archive for your platform from the
-[latest release](https://github.com/anish-agr/claude-flash/releases/latest), then
-run `flash install` from the extracted folder.
+### Windows
 
-On Windows, in PowerShell:
+In Windows PowerShell:
 
 ```powershell
-Expand-Archive claude-flash-windows-x64.zip -DestinationPath claude-flash
+cd $env:TEMP
+```
+
+```powershell
+curl.exe -fLO https://github.com/anish-agr/claude-flash/releases/latest/download/claude-flash-windows-x64.zip
+```
+
+```powershell
+Expand-Archive claude-flash-windows-x64.zip -DestinationPath claude-flash -Force
 ```
 
 ```powershell
 .\claude-flash\flash.exe install
 ```
 
-On macOS:
+Type `curl.exe` in full: in Windows PowerShell, `curl` on its own runs a different
+command.
+
+### macOS
+
+In Terminal:
 
 ```bash
-mkdir claude-flash && tar -xzf claude-flash-macos-universal.tar.gz -C claude-flash
+cd "$TMPDIR"
 ```
 
 ```bash
-xattr -dr com.apple.quarantine claude-flash && ./claude-flash/flash install
+curl -fLO https://github.com/anish-agr/claude-flash/releases/latest/download/claude-flash-macos-universal.tar.gz
 ```
 
-The programs are not code-signed. On macOS, `xattr` clears the quarantine flag
-that Gatekeeper puts on downloads. On Windows, SmartScreen or Smart App Control
-may ask before the first run.
+```bash
+mkdir -p claude-flash && tar -xzf claude-flash-macos-universal.tar.gz -C claude-flash
+```
+
+```bash
+./claude-flash/flash install
+```
+
+The programs go in `~/.local/bin`, which is not on the macOS `PATH` unless
+something else put it there. If `flash --version` says `command not found`, add it
+for zsh, the default shell:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+```
+
+### After installing
+
+Claude Code reads hooks when a session starts, so quit every session that is
+already open, in a terminal, the desktop app or your editor, and start it again.
+Then see [Check it works](#check-it-works).
+[docs/getting-started.md](docs/getting-started.md) walks through every check on
+both platforms, and how to report a problem.
+
+The programs are not code-signed. Downloaded with `curl` as above, they carry no
+quarantine flag on macOS and no downloaded-from-the-internet mark on Windows, so
+Gatekeeper and SmartScreen have nothing to act on. Smart App Control, when it is
+on, blocks unsigned programs however they arrived.
 
 ### From source
 
@@ -77,21 +113,20 @@ cargo install --locked --git https://github.com/anish-agr/claude-flash claude-fl
 flash install --bin-dir ~/.cargo/bin
 ```
 
+In PowerShell, write the folder as `$HOME\.cargo\bin`.
+
 ### What `flash install` does
 
-1. Puts `flash` and `flash-agent` in a folder on your `PATH`:
-   `%LOCALAPPDATA%\Microsoft\WindowsApps` on Windows and `~/.local/bin` on macOS,
-   unless `--bin-dir` names another.
-2. Writes a commented `config.toml`.
+1. Copies `flash` and `flash-agent` to `%LOCALAPPDATA%\Microsoft\WindowsApps` on
+   Windows, which is already on the `PATH`, or to `~/.local/bin` on macOS, unless
+   `--bin-dir` names another folder.
+2. Writes a commented `config.toml`, unless one exists.
 3. Adds hooks to `~/.claude/settings.json`. Every other setting and every other
    tool's hooks keep their content and their position, and the previous file is
    saved next to it as `settings.json.claude-flash-backup`.
 4. Registers the agent to start at login: a `Run` registry value on Windows, a
    LaunchAgent on macOS.
 5. Starts the agent.
-
-Claude Code reads hooks when a session starts, so restart sessions that are
-already open, then see [Check it works](#check-it-works).
 
 | Option | Effect |
 |---|---|
@@ -100,9 +135,28 @@ already open, then see [Check it works](#check-it-works).
 | `--no-autostart` | Do not start the agent at login |
 | `--desktop-toggle` | On Windows, add a desktop shortcut that turns flashes on and off |
 
-`flash uninstall` removes the hooks and the login item and stops the agent.
-`flash uninstall --purge` also deletes the settings, the journal and the saved
-state.
+### Uninstall
+
+```bash
+flash uninstall
+```
+
+This stops the agent and removes the hooks and the login item. Add `--purge` to
+delete the settings, the journal and the saved state as well. The programs stay, so
+delete them next. On Windows:
+
+```powershell
+Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\flash.exe", "$env:LOCALAPPDATA\Microsoft\WindowsApps\flash-agent.exe"
+```
+
+On macOS:
+
+```bash
+rm ~/.local/bin/flash ~/.local/bin/flash-agent
+```
+
+Then restart Claude Code once more. A session that is still open keeps the hooks it
+loaded, and shows "hook error occurred" until it restarts.
 
 ## Check it works
 
@@ -367,6 +421,7 @@ arrives during a flash is shown when the interval ends rather than dropped.
 
 | Document | Contents |
 |---|---|
+| [docs/getting-started.md](docs/getting-started.md) | Installing, checking every part, reporting a problem and removing it, on Windows and macOS |
 | [docs/how-it-works.md](docs/how-it-works.md) | The hooks, the policy engine, and how a flash is drawn on each platform |
 | [docs/configuration.md](docs/configuration.md) | Every setting, its default and what it accepts |
 | [docs/api.md](docs/api.md) | The local HTTP API: admission, the token and every endpoint |
@@ -411,9 +466,18 @@ afterwards start the agent themselves.
 **A flash did not appear.** `flash log` shows each recent signal and what became of
 it, such as `held back: background session` or `held back: quiet hours`.
 
-**Windows blocks the programs.** Smart App Control and antivirus software can stop
-unsigned programs. Allow `flash.exe` and `flash-agent.exe`, or build them from
-source.
+**`flash` is not found after installing on macOS.** `~/.local/bin` is not on your
+`PATH`; [Install](#macos) has the line that adds it.
+
+**Windows or macOS will not run the programs.** They are not code-signed. An
+archive downloaded in a browser is marked as coming from the internet: on Windows,
+run `Unblock-File` on the zip before extracting it, and on macOS, run
+`xattr -dr com.apple.quarantine` on the extracted folder. Smart App Control on
+Windows blocks unsigned programs whatever their origin, and allows no exception for
+a single program.
+
+[docs/getting-started.md](docs/getting-started.md#if-something-is-wrong) covers
+more problems and their fixes.
 
 ## Upgrading from 1.x
 

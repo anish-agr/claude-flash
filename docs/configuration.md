@@ -1,7 +1,7 @@
 # Configuration
 
-[README](../README.md) · [How it works](how-it-works.md) ·
-[Local API](api.md) · [Security](../SECURITY.md)
+[README](../README.md) · [Getting started](getting-started.md) ·
+[How it works](how-it-works.md) · [Local API](api.md) · [Security](../SECURITY.md)
 
 Claude Flash reads `config.toml` from:
 
