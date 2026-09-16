@@ -239,8 +239,14 @@ again.
 
 **Windows will not run `flash.exe`.** A zip downloaded in a browser is marked as
 coming from the internet, and SmartScreen acts on that mark. Run `Unblock-File` on
-the zip and extract it again. Smart App Control, when it is on, blocks unsigned
-programs whatever their origin, and allows no exception for a single program.
+the zip and extract it again.
+
+**Everything stopped on Windows.** Smart App Control, when it is on, judges
+unsigned programs by reputation, allows no exception for a single program, and can
+start blocking one days after it first ran. Flashes stop, new Claude Code sessions
+report a hook error, and `flash` will not start. A build it has not blocked, such
+as one built from source, works again; so does turning Smart App Control off, which
+Windows may not let you turn back on without resetting the PC.
 
 **Claude Code shows "hook error occurred".** The agent is not running, so Claude
 Code cannot deliver events to it. Start it with `flash agent start`.

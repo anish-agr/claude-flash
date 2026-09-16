@@ -472,9 +472,14 @@ it, such as `held back: background session` or `held back: quiet hours`.
 **Windows or macOS will not run the programs.** They are not code-signed. An
 archive downloaded in a browser is marked as coming from the internet: on Windows,
 run `Unblock-File` on the zip before extracting it, and on macOS, run
-`xattr -dr com.apple.quarantine` on the extracted folder. Smart App Control on
-Windows blocks unsigned programs whatever their origin, and allows no exception for
-a single program.
+`xattr -dr com.apple.quarantine` on the extracted folder.
+
+**Everything stopped on Windows, and `flash` will not start.** Smart App Control
+judges unsigned programs by reputation, allows no exception for a single program,
+and can start blocking one days after it first ran. Flashes then stop, and new
+Claude Code sessions report a hook error. Until releases are code-signed, the fixes
+are a build it has not blocked, such as one built from source, or turning Smart App
+Control off, which Windows may not let you turn back on without resetting the PC.
 
 [docs/getting-started.md](docs/getting-started.md#if-something-is-wrong) covers
 more problems and their fixes.
