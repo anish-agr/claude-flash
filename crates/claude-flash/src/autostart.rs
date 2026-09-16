@@ -27,8 +27,8 @@ mod platform {
 
     use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
     use windows_sys::Win32::System::Registry::{
-        HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_SAM_FLAGS, REG_SZ, RegCloseKey, RegDeleteValueW,
-        RegOpenKeyExW, RegQueryValueExW, RegSetValueExW,
+        HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_OPTION_NON_VOLATILE, REG_SAM_FLAGS, REG_SZ,
+        RegCloseKey, RegCreateKeyExW, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW,
     };
 
     use crate::system::wide;
@@ -40,7 +40,8 @@ mod platform {
 
     impl Drop for Key {
         fn drop(&mut self) {
-            // SAFETY: the key came from RegOpenKeyExW and is closed exactly once.
+            // SAFETY: the key came from RegOpenKeyExW or RegCreateKeyExW and is
+            // closed exactly once.
             unsafe { RegCloseKey(self.0) };
         }
     }
@@ -54,6 +55,29 @@ mod platform {
         let mut key: HKEY = std::ptr::null_mut();
         // SAFETY: `subkey` is NUL-terminated UTF-16 and `key` is a valid out-pointer.
         check(unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, subkey.as_ptr(), 0, access, &mut key) })?;
+        Ok(Key(key))
+    }
+
+    /// Opens the key for writing, creating it on a profile that has never had one.
+    fn create() -> io::Result<Key> {
+        let subkey = wide(RUN);
+        let mut key: HKEY = std::ptr::null_mut();
+        // SAFETY: `subkey` is NUL-terminated UTF-16, the class, the security
+        // attributes and the disposition may be null, and `key` is a valid
+        // out-pointer.
+        check(unsafe {
+            RegCreateKeyExW(
+                HKEY_CURRENT_USER,
+                subkey.as_ptr(),
+                0,
+                std::ptr::null(),
+                REG_OPTION_NON_VOLATILE,
+                KEY_SET_VALUE,
+                std::ptr::null(),
+                &mut key,
+                std::ptr::null_mut(),
+            )
+        })?;
         Ok(Key(key))
     }
 
@@ -79,7 +103,7 @@ mod platform {
     }
 
     pub fn enable(agent: &Path) -> io::Result<()> {
-        let key = open(KEY_SET_VALUE)?;
+        let key = create()?;
         let name = wide(VALUE);
         let command = wide(format!("\"{}\"", agent.display()));
         let bytes = u32::try_from(command.len() * 2).map_err(|_| io::Error::other("path too long"))?;
@@ -88,7 +112,12 @@ mod platform {
     }
 
     pub fn disable() -> io::Result<()> {
-        let key = open(KEY_SET_VALUE)?;
+        let key = match open(KEY_SET_VALUE) {
+            Ok(key) => key,
+            // A profile without the key has no value to remove.
+            Err(e) if e.raw_os_error() == Some(ERROR_FILE_NOT_FOUND as i32) => return Ok(()),
+            Err(e) => return Err(e),
+        };
         let name = wide(VALUE);
         // SAFETY: `name` is NUL-terminated UTF-16.
         match unsafe { RegDeleteValueW(key.0, name.as_ptr()) } {
