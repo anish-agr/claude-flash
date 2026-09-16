@@ -133,6 +133,20 @@ jobs:
         run: |
           target/release/flash agent stop || true
           cat "$CLAUDE_FLASH_HOME/agent.log" || true
+      - name: Remove the login items key (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        # Some profiles have never had this key, and the installer has to create it.
+        run: Remove-Item -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Recurse -Force -ErrorAction SilentlyContinue
+      - name: Install and uninstall as a user would
+        shell: bash
+        run: |
+          set -euxo pipefail
+          unset CLAUDE_FLASH_HOME
+          mkdir -p ~/.claude
+          target/release/flash install
+          target/release/flash status
+          target/release/flash uninstall --purge
       - uses: actions/upload-artifact@v7
         if: always()
         with:
