@@ -6,10 +6,18 @@ Notable changes to Claude Flash. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `flash install` recognises programs installed by Homebrew or Scoop. It leaves them
+  where the package manager put them, points the login item and the hook at paths
+  that survive upgrades, and `flash uninstall` names the command that removes them.
+
 ### Fixed
 
 - `flash install` no longer asks you to restart open Claude Code sessions when the
   hooks were already current. Those sessions reach the new agent as they are.
+- `flash install` no longer says the programs are not on the `PATH` when a link or
+  a shim on the `PATH` already runs them.
 
 ## [2.1.0] - 2026-09-11
 

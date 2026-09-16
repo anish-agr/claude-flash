@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use clap::Args;
 use flash_core::config;
@@ -13,7 +13,8 @@ use crate::{autostart, paths};
 
 #[derive(Args)]
 pub struct InstallArgs {
-    /// Where to put flash and flash-agent [default: a folder already on PATH]
+    /// Where to put flash and flash-agent [default: a folder already on PATH, or
+    /// wherever Homebrew or Scoop put them]
     #[arg(long)]
     bin_dir: Option<PathBuf>,
     /// Leave Claude Code's settings.json alone
@@ -37,7 +38,7 @@ pub struct UninstallArgs {
 pub fn install(env: &Env, args: &InstallArgs) -> Outcome {
     let exe = std::env::current_exe().map_err(|e| format!("cannot locate this executable: {e}"))?;
     let source = exe.parent().ok_or("this executable is not in a folder")?;
-    let bin_dir = args.bin_dir.clone().unwrap_or_else(default_bin_dir);
+    let bin_dir = args.bin_dir.clone().unwrap_or_else(|| default_bin_dir(&exe));
 
     // A running agent holds its executable open on Windows, and an older one would
     // keep answering after the upgrade, so it stops first in every case.
@@ -128,18 +129,79 @@ pub fn uninstall(env: &Env, args: &UninstallArgs) -> Outcome {
     }
     println!();
     println!("Claude Flash is uninstalled.");
-    if let Some(dir) = std::env::current_exe().ok().as_deref().and_then(Path::parent) {
-        let hint = format!("Delete flash and flash-agent from {} to remove the programs as well.", paths::display(dir));
-        println!("{}", style::dim(&hint));
+    if let Ok(exe) = std::env::current_exe() {
+        println!("{}", style::dim(&removal_hint(&exe)));
     }
     Ok(())
+}
+
+/// A package manager that installed these programs, told apart by where they live.
+#[derive(Debug, PartialEq, Eq)]
+enum PackageManager {
+    /// `PREFIX/Cellar/claude-flash/VERSION/bin/flash`, linked into `PREFIX/bin`.
+    Homebrew { prefix: PathBuf },
+    /// `ROOT/apps/claude-flash/VERSION/flash.exe`, where `current` stands for the
+    /// version in use.
+    Scoop { app: PathBuf },
+}
+
+impl PackageManager {
+    /// Looks at the path the program was started from, then at the file it leads
+    /// to: a Scoop shim starts it through `current`, Homebrew through a link.
+    fn find(exe: &Path) -> Option<PackageManager> {
+        PackageManager::detect(exe).or_else(|| PackageManager::detect(&fs::canonicalize(exe).ok()?))
+    }
+
+    fn detect(exe: &Path) -> Option<PackageManager> {
+        let parts: Vec<Component> = exe.components().collect();
+        let is = |i: usize, name: &str| parts.get(i).is_some_and(|part| part.as_os_str().eq_ignore_ascii_case(name));
+        (0..parts.len()).find_map(|i| {
+            if is(i, "Cellar") && is(i + 1, "claude-flash") && parts.len() == i + 5 {
+                Some(PackageManager::Homebrew { prefix: parts[..i].iter().collect() })
+            } else if is(i, "apps") && is(i + 1, "claude-flash") && parts.len() == i + 4 {
+                Some(PackageManager::Scoop { app: parts[..i + 2].iter().collect() })
+            } else {
+                None
+            }
+        })
+    }
+
+    /// A folder whose path survives upgrades, which the login item and the
+    /// `SessionStart` hook depend on.
+    fn bin_dir(&self) -> PathBuf {
+        match self {
+            PackageManager::Homebrew { prefix } => prefix.join("bin"),
+            PackageManager::Scoop { app } => app.join("current"),
+        }
+    }
+
+    fn uninstall_command(&self) -> &'static str {
+        match self {
+            PackageManager::Homebrew { .. } => "brew uninstall claude-flash",
+            PackageManager::Scoop { .. } => "scoop uninstall claude-flash",
+        }
+    }
+}
+
+/// How to remove the programs themselves, which `flash uninstall` leaves in place.
+fn removal_hint(exe: &Path) -> String {
+    match PackageManager::find(exe) {
+        Some(manager) => format!("Run `{}` to remove the programs as well.", manager.uninstall_command()),
+        None => {
+            let dir = exe.parent().unwrap_or(exe);
+            format!("Delete flash and flash-agent from {} to remove the programs as well.", paths::display(dir))
+        }
+    }
 }
 
 fn step(what: &str, detail: &str) {
     println!("{} {what:<10}{detail}", style::green("✓"));
 }
 
-fn default_bin_dir() -> PathBuf {
+fn default_bin_dir(exe: &Path) -> PathBuf {
+    if let Some(dir) = PackageManager::find(exe).map(|manager| manager.bin_dir()).filter(|dir| dir.is_dir()) {
+        return dir;
+    }
     #[cfg(windows)]
     {
         // On PATH for every Windows 10 and 11 user, and where version 1 installed.
@@ -155,8 +217,8 @@ fn default_bin_dir() -> PathBuf {
     }
 }
 
-/// Copies `flash` and `flash-agent` from `source` into `bin_dir`, unless that is
-/// where they already are.
+/// Copies `flash` and `flash-agent` from `source` into `bin_dir`, unless they are
+/// already there, as they are when a package manager has linked them in.
 fn place_binaries(source: &Path, bin_dir: &Path) -> Result<(PathBuf, PathBuf), String> {
     let names =
         [format!("flash{}", std::env::consts::EXE_SUFFIX), format!("flash-agent{}", std::env::consts::EXE_SUFFIX)];
@@ -164,7 +226,12 @@ fn place_binaries(source: &Path, bin_dir: &Path) -> Result<(PathBuf, PathBuf), S
     if !same_dir(source, bin_dir) {
         fs::create_dir_all(bin_dir).map_err(|e| format!("could not create {}: {e}", bin_dir.display()))?;
         for name in &names {
-            replace(&source.join(name), &bin_dir.join(name))?;
+            let (from, to) = (source.join(name), bin_dir.join(name));
+            // Copying over a package manager's link would take the file out of its
+            // hands, so the next upgrade could not replace it.
+            if !same_file(&from, &to) {
+                replace(&from, &to)?;
+            }
         }
     }
     if !placed.1.is_file() {
@@ -180,8 +247,17 @@ fn same_dir(a: &Path, b: &Path) -> bool {
     }
 }
 
+fn same_file(a: &Path, b: &Path) -> bool {
+    matches!((fs::canonicalize(a), fs::canonicalize(b)), (Ok(a), Ok(b)) if a == b)
+}
+
+/// Whether a terminal finds `flash`: `dir` is on PATH, or something on PATH answers
+/// to the name, such as a Scoop shim.
 fn on_path(dir: &Path) -> bool {
-    std::env::var_os("PATH").is_some_and(|path| std::env::split_paths(&path).any(|entry| same_dir(&entry, dir)))
+    let name = format!("flash{}", std::env::consts::EXE_SUFFIX);
+    std::env::var_os("PATH").is_some_and(|path| {
+        std::env::split_paths(&path).any(|entry| same_dir(&entry, dir) || entry.join(&name).is_file())
+    })
 }
 
 /// Puts a copy of `from` at `to`. Windows will not overwrite a running executable
@@ -295,4 +371,97 @@ fn remove_desktop_toggle() -> bool {
 #[cfg(not(windows))]
 fn remove_desktop_toggle() -> bool {
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn detect(path: &str) -> Option<PackageManager> {
+        PackageManager::detect(Path::new(path))
+    }
+
+    #[test]
+    fn recognises_homebrew_and_scoop_installs() {
+        assert_eq!(
+            detect("/opt/homebrew/Cellar/claude-flash/2.1.1/bin/flash"),
+            Some(PackageManager::Homebrew { prefix: PathBuf::from("/opt/homebrew") })
+        );
+        assert_eq!(
+            detect("/usr/local/Cellar/claude-flash/2.1.1/bin/flash-agent"),
+            Some(PackageManager::Homebrew { prefix: PathBuf::from("/usr/local") })
+        );
+        assert_eq!(
+            detect("C:/Users/a/scoop/apps/claude-flash/current/flash.exe"),
+            Some(PackageManager::Scoop { app: PathBuf::from("C:/Users/a/scoop/apps/claude-flash") })
+        );
+        assert_eq!(
+            detect("C:/Users/a/Scoop/Apps/Claude-Flash/2.1.1/flash.exe"),
+            Some(PackageManager::Scoop { app: PathBuf::from("C:/Users/a/Scoop/Apps/Claude-Flash") })
+        );
+    }
+
+    #[test]
+    fn leaves_other_folders_to_the_plain_install() {
+        for path in [
+            "/Users/a/.local/bin/flash",
+            "/opt/homebrew/bin/flash",
+            "C:/Users/a/AppData/Local/Microsoft/WindowsApps/flash.exe",
+            "/Users/a/apps/claude-flash/flash",
+            "/Users/a/Cellar/other-tool/1.0/bin/flash",
+        ] {
+            assert_eq!(detect(path), None, "{path}");
+        }
+    }
+
+    #[test]
+    fn tells_package_manager_users_how_to_remove_the_programs() {
+        let hint = |path: &str| removal_hint(Path::new(path));
+        assert!(hint("/opt/homebrew/Cellar/claude-flash/2.1.1/bin/flash").contains("`brew uninstall claude-flash`"));
+        assert!(
+            hint("C:/Users/a/scoop/apps/claude-flash/current/flash.exe").contains("`scoop uninstall claude-flash`")
+        );
+        assert!(hint("/Users/a/.local/bin/flash").starts_with("Delete flash and flash-agent from"));
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("claude-flash-{}", std::process::id())).join("install").join(name);
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn programs_in(dir: &Path) {
+        fs::create_dir_all(dir).unwrap();
+        for name in ["flash", "flash-agent"] {
+            fs::write(dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX)), name).unwrap();
+        }
+    }
+
+    #[test]
+    fn copies_the_programs_into_another_folder() {
+        let root = scratch("copy");
+        let (source, bin) = (root.join("download"), root.join("bin"));
+        programs_in(&source);
+        let (flash, agent) = place_binaries(&source, &bin).unwrap();
+        assert!(flash.is_file() && agent.is_file());
+        assert!(!same_file(&flash, &source.join(flash.file_name().unwrap())), "a copy, not the original");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn leaves_the_links_a_package_manager_made() {
+        use std::os::unix::fs::symlink;
+        let root = scratch("links");
+        let (keg, bin) = (root.join("keg"), root.join("bin"));
+        programs_in(&keg);
+        fs::create_dir_all(&bin).unwrap();
+        for name in ["flash", "flash-agent"] {
+            symlink(keg.join(name), bin.join(name)).unwrap();
+        }
+        place_binaries(&keg, &bin).unwrap();
+        for name in ["flash", "flash-agent"] {
+            assert!(fs::symlink_metadata(bin.join(name)).unwrap().file_type().is_symlink(), "{name} is still a link");
+        }
+    }
 }
