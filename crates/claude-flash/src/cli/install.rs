@@ -40,6 +40,10 @@ pub fn install(env: &Env, args: &InstallArgs) -> Outcome {
     let source = exe.parent().ok_or("this executable is not in a folder")?;
     let bin_dir = args.bin_dir.clone().unwrap_or_else(|| default_bin_dir(&exe));
 
+    // Move an older Windows install's data into the profile root before anything
+    // reads it, so the token comes across and stopping the old agent can authenticate.
+    paths::relocate_legacy_data(&env.paths);
+
     // A running agent holds its executable open on Windows, and an older one would
     // keep answering after the upgrade, so it stops first in every case.
     agent::stop(env)?;

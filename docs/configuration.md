@@ -7,7 +7,7 @@ Claude Flash reads `config.toml` from:
 
 | Platform | Location |
 |---|---|
-| Windows | `%LOCALAPPDATA%\ClaudeFlash\config.toml` |
+| Windows | `%USERPROFILE%\.claude-flash\config.toml` |
 | macOS | `~/Library/Application Support/claude-flash/config.toml` |
 | Linux | `$XDG_CONFIG_HOME/claude-flash/config.toml`, by default `~/.config/claude-flash/config.toml` |
 

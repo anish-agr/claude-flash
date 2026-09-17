@@ -19,7 +19,7 @@ undoes them:
 | | Windows | macOS |
 |---|---|---|
 | Programs | `%LOCALAPPDATA%\Microsoft\WindowsApps`, or Scoop's folder | `~/.local/bin`, or Homebrew's folder |
-| Settings and journal | `%LOCALAPPDATA%\ClaudeFlash` | `~/Library/Application Support/claude-flash` |
+| Settings and journal | `~\.claude-flash` | `~/Library/Application Support/claude-flash` |
 | Start at login | A `Run` registry value | A LaunchAgent |
 | Claude Code hooks | `~/.claude/settings.json`, with a backup beside it | The same |
 
@@ -266,8 +266,16 @@ the zip and extract it again.
 unsigned programs by reputation, allows no exception for a single program, and can
 start blocking one days after it first ran. Flashes stop, new Claude Code sessions
 report a hook error, and `flash` will not start. A build it has not blocked, such
-as one built from source, works again; so does turning Smart App Control off, which
-Windows may not let you turn back on without resetting the PC.
+as one built from source, works again; so does turning Smart App Control off in
+Windows Security under **App & browser control**, which recent Windows 11 updates
+let you turn back on again without resetting the PC.
+
+**A terminal says `missing or incorrect API token`, but flashes still work.** You
+installed Claude Flash from inside a packaged app, such as the Claude desktop app,
+which keeps each program's writes under `AppData` in a private copy the app alone
+can see. Your own terminals then read an empty data folder and cannot reach the
+agent. Run `flash install` once; it moves the token and settings to `~\.claude-flash`
+in your user folder, which every program shares, and the token works everywhere.
 
 **Claude Code shows "hook error occurred".** The agent is not running, so Claude
 Code cannot deliver events to it. Start it with `flash agent start`.

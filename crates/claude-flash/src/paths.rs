@@ -1,6 +1,8 @@
 //! Where Claude Flash keeps its files.
 
 use std::env;
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -50,9 +52,21 @@ impl Paths {
 
 #[cfg(windows)]
 fn platform_paths() -> Paths {
+    // The profile root, next to Claude Code's own `~/.claude`, not a folder under
+    // `AppData`. A packaged host such as the Claude desktop app redirects the writes
+    // its child processes make under `AppData` into a private per-app copy, so a
+    // token or settings file written there from inside the app is invisible to the
+    // user's own terminals, and the reverse. The profile root is not redirected, so
+    // every process sees one Claude Flash. `relocate_legacy_data` carries an older
+    // install's files here.
+    Paths::at(home().join(".claude-flash"))
+}
+
+/// Where Windows builds before this one kept their data.
+#[cfg(windows)]
+fn legacy_windows_data_dir() -> PathBuf {
     let local = env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(|| home().join("AppData").join("Local"));
-    // The same folder v1 used, so an upgrade finds its settings where it left them.
-    Paths::at(local.join("ClaudeFlash"))
+    local.join("ClaudeFlash")
 }
 
 #[cfg(target_os = "macos")]
@@ -74,6 +88,53 @@ fn platform_paths() -> Paths {
 pub fn home() -> PathBuf {
     let var = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
     env::var_os(var).filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// Carries a Windows install's data from the old `%LOCALAPPDATA%\ClaudeFlash` folder
+/// into the profile root the first time a build that uses the new location runs, so
+/// nobody loses a token, settings or the journal in the move. It copies rather than
+/// deletes, and only fills gaps, so running it twice is safe and the old folder stays
+/// as a backup. It does nothing when a custom `CLAUDE_FLASH_HOME` is in force, when
+/// the new home already holds settings, or on macOS and Linux, which are not
+/// redirected.
+pub fn relocate_legacy_data(active: &Paths) {
+    #[cfg(windows)]
+    {
+        let default_home = home().join(".claude-flash");
+        // A custom CLAUDE_FLASH_HOME points somewhere the user chose; leave it alone.
+        if active.data_dir != default_home {
+            return;
+        }
+        let old = legacy_windows_data_dir();
+        if old == default_home || active.config_file().exists() {
+            return;
+        }
+        // Only move a real install, not an empty leftover folder.
+        if old.join("config.toml").exists() || old.join("token").exists() {
+            let _ = copy_tree_missing(&old, &default_home);
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = active;
+}
+
+/// Copies every file under `from` into `to` that `to` does not already have,
+/// recursing into subfolders. An existing file in `to` is kept as it is.
+fn copy_tree_missing(from: &Path, to: &Path) -> io::Result<()> {
+    if !from.is_dir() {
+        return Ok(());
+    }
+    fs::create_dir_all(to)?;
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+        if entry.file_type()?.is_dir() {
+            copy_tree_missing(&src, &dst)?;
+        } else if !dst.exists() {
+            fs::copy(&src, &dst)?;
+        }
+    }
+    Ok(())
 }
 
 /// Claude Code's user-level `settings.json`.
@@ -113,5 +174,26 @@ mod tests {
         let inside = home().join("notes").join("a.txt");
         assert!(display(&inside).starts_with('~'));
         assert!(!display(Path::new("/definitely/elsewhere")).starts_with('~'));
+    }
+
+    #[test]
+    fn relocation_fills_gaps_and_keeps_what_is_already_there() {
+        let root = env::temp_dir().join(format!("cf-relocate-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let (old, new) = (root.join("old"), root.join("new"));
+        fs::create_dir_all(old.join("journal")).unwrap();
+        fs::write(old.join("token"), "T").unwrap();
+        fs::write(old.join("config.toml"), "OLD").unwrap();
+        fs::write(old.join("journal").join("a.log"), "A").unwrap();
+        fs::create_dir_all(&new).unwrap();
+        // Something the new home already has must not be overwritten.
+        fs::write(new.join("config.toml"), "NEW").unwrap();
+
+        copy_tree_missing(&old, &new).unwrap();
+
+        assert_eq!(fs::read_to_string(new.join("config.toml")).unwrap(), "NEW");
+        assert_eq!(fs::read_to_string(new.join("token")).unwrap(), "T");
+        assert_eq!(fs::read_to_string(new.join("journal").join("a.log")).unwrap(), "A");
+        let _ = fs::remove_dir_all(&root);
     }
 }

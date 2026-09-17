@@ -217,6 +217,12 @@ fn not_running() -> String {
 fn agent_error(error: ClientError) -> String {
     match error {
         ClientError::NotRunning => not_running(),
+        // A running agent that made its token in a different data folder, which on
+        // Windows a packaged host such as the Claude desktop app can cause.
+        ClientError::Api { status: 401, .. } => {
+            "the agent is running with a different token; run `flash install` to repair, then `flash agent restart`"
+                .to_owned()
+        }
         other => other.to_string(),
     }
 }

@@ -35,7 +35,7 @@ needs the bearer token the agent creates in its data directory on first start:
 
 | Platform | Token file |
 |---|---|
-| Windows | `%LOCALAPPDATA%\ClaudeFlash\token` |
+| Windows | `%USERPROFILE%\.claude-flash\token` |
 | macOS | `~/Library/Application Support/claude-flash/token` |
 | Linux | `$XDG_STATE_HOME/claude-flash/token`, by default `~/.local/state/claude-flash/token` |
 
@@ -52,7 +52,7 @@ curl -s http://127.0.0.1:47823/v1/status -H "Authorization: Bearer $TOKEN"
 In PowerShell:
 
 ```powershell
-$token = Get-Content "$env:LOCALAPPDATA\ClaudeFlash\token"
+$token = Get-Content "$env:USERPROFILE\.claude-flash\token"
 ```
 
 ```powershell
@@ -115,9 +115,9 @@ successful hook with no decision.
     { "kind": "approval", "project": "claude-flash", "session": "3aee9676", "tool": "Bash", "for_ms": 80213 }
   ],
   "today": { "done": 14, "question": 3, "approval": 5, "error": 0, "flashes": 21, "suppressed": 4 },
-  "config_path": "C:\\Users\\you\\AppData\\Local\\ClaudeFlash\\config.toml",
+  "config_path": "C:\\Users\\you\\.claude-flash\\config.toml",
   "config_error": null,
-  "journal_path": "C:\\Users\\you\\AppData\\Local\\ClaudeFlash\\journal",
+  "journal_path": "C:\\Users\\you\\.claude-flash\\journal",
   "last_event": { "event": "PermissionRequest", "project": "claude-flash", "ts": "2026-09-11T11:14:03.120Z" },
   "opted_out": 0
 }

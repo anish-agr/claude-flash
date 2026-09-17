@@ -53,6 +53,9 @@ pub fn main() -> ExitCode {
 
 pub fn run(options: Options) -> ExitCode {
     let paths = Paths::resolve();
+    // An agent started by the login item or a session hook, before the user has run
+    // the new installer, still finds an older install's token and settings.
+    crate::paths::relocate_legacy_data(&paths);
     if let Err(e) = fs::create_dir_all(&paths.data_dir) {
         eprintln!("flash-agent: cannot create {}: {e}", paths.data_dir.display());
         return ExitCode::FAILURE;

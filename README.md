@@ -144,7 +144,9 @@ In PowerShell, write the folder as `$HOME\.cargo\bin`.
 1. Copies `flash` and `flash-agent` to `%LOCALAPPDATA%\Microsoft\WindowsApps` on
    Windows, which is already on the `PATH`, or to `~/.local/bin` on macOS, unless
    `--bin-dir` names another folder.
-2. Writes a commented `config.toml`, unless one exists.
+2. Writes a commented `config.toml`, unless one exists. The settings, the token and
+   the journal live in `~\.claude-flash` on Windows and in
+   `~/Library/Application Support/claude-flash` on macOS.
 3. Adds hooks to `~/.claude/settings.json`. Every other setting and every other
    tool's hooks keep their content and their position, and the previous file is
    saved next to it as `settings.json.claude-flash-backup`.
@@ -223,11 +225,11 @@ it finds:
 $ flash doctor
 Claude Flash 2.2.0
 ✓ agent     running · pid 33972 · 127.0.0.1:47823
-✓ settings  ~\AppData\Local\ClaudeFlash\config.toml
+✓ settings  ~\.claude-flash\config.toml
 ✓ hooks     13 events · ~\.claude\settings.json
 ✓ at login  ~\AppData\Local\Microsoft\WindowsApps\flash-agent.exe
 ✓ activity  last hook event PostToolUse 48s ago
-✓ journal   ~\AppData\Local\ClaudeFlash\journal · 2 KB · kept 30 days
+✓ journal   ~\.claude-flash\journal · 2 KB · kept 30 days
 ```
 
 ## Usage
@@ -239,7 +241,7 @@ waiting   approval  Write in claude-flash  1m 20s · session 3aee9676
           question  pricetime  6s · session 91b0c2d4
 today     14 done · 3 questions · 5 approvals · 0 errors · 21 flashes · 4 held back
 hooks     installed
-config    ~\AppData\Local\ClaudeFlash\config.toml
+config    ~\.claude-flash\config.toml
 ```
 
 | Command | What it does |
@@ -363,7 +365,7 @@ $env:CLAUDE_FLASH = "off"; claude -p "Summarise the changes on this branch"
 
 ## Configuration
 
-`config.toml` is in `%LOCALAPPDATA%\ClaudeFlash` on Windows and in
+`config.toml` is in `~\.claude-flash` on Windows and in
 `~/Library/Application Support/claude-flash` on macOS; `flash config edit` opens
 it. The agent applies changes within a second. If the file has a mistake, `flash
 status` and `flash doctor` say so and the previous settings stay in effect.
@@ -504,7 +506,14 @@ judges unsigned programs by reputation, allows no exception for a single program
 and can start blocking one days after it first ran. Flashes then stop, and new
 Claude Code sessions report a hook error. Until releases are code-signed, the fixes
 are a build it has not blocked, such as one built from source, or turning Smart App
-Control off, which Windows may not let you turn back on without resetting the PC.
+Control off in Windows Security; recent Windows 11 updates let you turn it back on
+again without resetting the PC.
+
+**A terminal reports `missing or incorrect API token`, but flashes still work.** You
+installed from inside a packaged app, such as the Claude desktop app, which keeps a
+program's `AppData` writes in a private copy that your terminals cannot see. Run
+`flash install` once: it moves the token and settings to `~\.claude-flash`, which
+every program shares.
 
 [docs/getting-started.md](docs/getting-started.md#if-something-is-wrong) covers
 more problems and their fixes.

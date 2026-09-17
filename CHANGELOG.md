@@ -6,10 +6,23 @@ Notable changes to Claude Flash. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- On Windows, Claude Flash now keeps its token, settings and journal in
+  `~\.claude-flash`, next to Claude Code's own `~\.claude`, instead of under
+  `%LOCALAPPDATA%`. A packaged host such as the Claude desktop app redirects the
+  `AppData` writes its child processes make into a private per-app copy, so a token
+  written there was invisible to the user's own terminals, which then failed with a
+  401. The profile root is shared, so every program now sees one agent. `flash
+  install` and the agent move an existing install's files across the first time they
+  run, keeping the old folder as a backup.
+
 ### Fixed
 
 - `flash config set` says that `agent.port` and `agent.remote` take effect after a
   restart, instead of claiming the running agent applies them within a second.
+- A 401 from the agent now suggests `flash install` and a restart, rather than only
+  repeating the server's "missing or incorrect API token".
 
 ## [2.2.0] - 2026-09-16
 
