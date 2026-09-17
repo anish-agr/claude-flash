@@ -18,7 +18,7 @@ undoes them:
 
 | | Windows | macOS |
 |---|---|---|
-| Programs | `%LOCALAPPDATA%\Microsoft\WindowsApps` | `~/.local/bin` |
+| Programs | `%LOCALAPPDATA%\Microsoft\WindowsApps`, or Scoop's folder | `~/.local/bin`, or Homebrew's folder |
 | Settings and journal | `%LOCALAPPDATA%\ClaudeFlash` | `~/Library/Application Support/claude-flash` |
 | Start at login | A `Run` registry value | A LaunchAgent |
 | Claude Code hooks | `~/.claude/settings.json`, with a backup beside it | The same |
@@ -28,6 +28,27 @@ kinds, project folder names and timings, and never prompts, code or Claude's
 replies.
 
 ## 1. Install
+
+With Homebrew on macOS or Scoop on Windows, installing takes two commands. First
+one of these:
+
+```bash
+brew install anish-agr/tap/claude-flash
+```
+
+```powershell
+scoop install https://raw.githubusercontent.com/anish-agr/claude-flash/main/packaging/scoop/claude-flash.json
+```
+
+Then, on either:
+
+```bash
+flash install
+```
+
+Its last line says Claude Flash is installed. Continue at
+[Restart Claude Code](#2-restart-claude-code). Without a package manager, follow
+the steps for your platform.
 
 ### Windows
 
@@ -52,8 +73,8 @@ Expand-Archive claude-flash-windows-x64.zip -DestinationPath claude-flash -Force
 Type `curl.exe` in full: in Windows PowerShell, `curl` on its own runs a different
 command.
 
-The installer prints a line for each step and ends with `Claude Flash 2.1.0 is
-installed`. A green sphere appears in the notification area; Windows 11 may put it
+The installer prints a line for each step, and its last line says Claude Flash is
+installed. A green sphere appears in the notification area; Windows 11 may put it
 under the arrow that shows hidden icons. The programs go in a folder that is
 already on the `PATH`, so `flash` works straight away:
 
@@ -81,8 +102,8 @@ mkdir -p claude-flash && tar -xzf claude-flash-macos-universal.tar.gz -C claude-
 ./claude-flash/flash install
 ```
 
-The installer prints a line for each step and ends with `Claude Flash 2.1.0 is
-installed`, and a green sphere appears in the menu bar. On macOS 13 or later a
+The installer prints a line for each step, and its last line says Claude Flash is
+installed. A green sphere appears in the menu bar. On macOS 13 or later a
 Background Items Added notification may name `flash-agent`; that is the login item.
 
 The programs go in `~/.local/bin`. Check that your shell finds them:
@@ -286,7 +307,9 @@ flash uninstall --purge
 ```
 
 This stops the agent and removes the hooks, the login item, the settings and the
-journal. The programs stay, so delete them next.
+journal. The programs stay. If Homebrew or Scoop installed them, remove them with
+`brew uninstall claude-flash` or `scoop uninstall claude-flash`. Otherwise delete
+them.
 
 On Windows:
 

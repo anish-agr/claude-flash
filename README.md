@@ -37,9 +37,33 @@ flash after you come back reports what you missed.
 
 Each block is one command.
 
+### With Homebrew or Scoop
+
+On macOS, with [Homebrew](https://brew.sh):
+
+```bash
+brew install anish-agr/tap/claude-flash
+```
+
+On Windows, with [Scoop](https://scoop.sh):
+
+```powershell
+scoop install https://raw.githubusercontent.com/anish-agr/claude-flash/main/packaging/scoop/claude-flash.json
+```
+
+Then, on either, add the hooks and start the agent:
+
+```bash
+flash install
+```
+
+To update with Homebrew, run `brew upgrade claude-flash` and then
+`flash agent restart`. Scoop cannot replace a program that is running, so run
+`flash agent stop`, then `scoop update claude-flash`, then `flash agent start`.
+
 ### Windows
 
-In Windows PowerShell:
+Without Scoop, in Windows PowerShell:
 
 ```powershell
 cd $env:TEMP
@@ -62,7 +86,7 @@ command.
 
 ### macOS
 
-In Terminal:
+Without Homebrew, in Terminal:
 
 ```bash
 cd "$TMPDIR"
@@ -142,8 +166,9 @@ flash uninstall
 ```
 
 This stops the agent and removes the hooks and the login item. Add `--purge` to
-delete the settings, the journal and the saved state as well. The programs stay, so
-delete them next. On Windows:
+delete the settings, the journal and the saved state as well. The programs stay. If
+Homebrew or Scoop installed them, remove them with `brew uninstall claude-flash` or
+`scoop uninstall claude-flash`; otherwise delete them. On Windows:
 
 ```powershell
 Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\flash.exe", "$env:LOCALAPPDATA\Microsoft\WindowsApps\flash-agent.exe"
@@ -196,7 +221,7 @@ it finds:
 
 ```text
 $ flash doctor
-Claude Flash 2.1.0
+Claude Flash 2.2.0
 ✓ agent     running · pid 33972 · 127.0.0.1:47823
 ✓ settings  ~\AppData\Local\ClaudeFlash\config.toml
 ✓ hooks     13 events · ~\.claude\settings.json
@@ -209,7 +234,7 @@ Claude Flash 2.1.0
 
 ```text
 $ flash status
-● on  agent 2.1.0 · pid 11208 · up 3h 12m
+● on  agent 2.2.0 · pid 11208 · up 3h 12m
 waiting   approval  Write in claude-flash  1m 20s · session 3aee9676
           question  pricetime  6s · session 91b0c2d4
 today     14 done · 3 questions · 5 approvals · 0 errors · 21 flashes · 4 held back
