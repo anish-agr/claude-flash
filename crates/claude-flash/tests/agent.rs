@@ -251,6 +251,12 @@ fn configuration_changes_apply_without_a_restart() {
     let agent = Agent::start("config");
     let set = agent.flash(&["config", "set", "signals.done.color", "#FFD400"]);
     assert!(set.status.success(), "{}", String::from_utf8_lossy(&set.stderr));
+    assert!(String::from_utf8_lossy(&set.stdout).contains("within a second"));
+    let remote = agent.flash(&["config", "set", "agent.remote", "false"]);
+    assert!(
+        String::from_utf8_lossy(&remote.stdout).contains("after `flash agent restart`"),
+        "the agent's address changes only when it starts again"
+    );
     let got = agent.flash(&["config", "get", "signals.done.color"]);
     assert_eq!(String::from_utf8_lossy(&got.stdout).trim(), "#FFD400");
     let text = fs::read_to_string(agent.home.join("config.toml")).unwrap();

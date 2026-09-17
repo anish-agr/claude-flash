@@ -4,6 +4,13 @@ Notable changes to Claude Flash. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- `flash config set` says that `agent.port` and `agent.remote` take effect after a
+  restart, instead of claiming the running agent applies them within a second.
+
 ## [2.2.0] - 2026-09-16
 
 ### Added

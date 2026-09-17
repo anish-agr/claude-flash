@@ -43,8 +43,15 @@ pub fn run(env: &Env, action: Option<ConfigAction>) -> Outcome {
                 .map_err(|e| format!("could not write {}: {e}", path.display()))?;
             let applied = Config::parse(&updated).ok().and_then(|c| c.get(&key)).unwrap_or(value);
             println!("{key} = {applied}");
-            if env.client().health().is_ok() {
-                println!("{}", style::dim("The running agent picks this up within a second."));
+            // The agent binds its address once, when it starts, and the hooks carry the port.
+            let note = match key.trim() {
+                "agent.port" => Some("It takes effect after `flash hooks install` and `flash agent restart`."),
+                agent if agent.starts_with("agent.") => Some("It takes effect after `flash agent restart`."),
+                _ if env.client().health().is_ok() => Some("The running agent picks this up within a second."),
+                _ => None,
+            };
+            if let Some(note) = note {
+                println!("{}", style::dim(note));
             }
         }
         ConfigAction::Edit => {
