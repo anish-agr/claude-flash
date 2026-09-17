@@ -16,6 +16,11 @@ Notable changes to Claude Flash. The format follows
   401. The profile root is shared, so every program now sees one agent. `flash
   install` and the agent move an existing install's files across the first time they
   run, keeping the old folder as a backup.
+- On Windows, the agent now starts at login from a scheduled task instead of a `Run`
+  registry value. That same packaged host redirects registry writes as well, so a
+  `Run` value written from inside it never started the agent at login; the Task
+  Scheduler store is shared, so the task works wherever `flash install` runs from,
+  and it starts on battery. `flash install` removes the old `Run` value.
 
 ### Fixed
 

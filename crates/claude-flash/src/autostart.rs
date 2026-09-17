@@ -1,4 +1,4 @@
-//! Starting the agent at login: a `Run` registry value on Windows, a LaunchAgent on
+//! Starting the agent at login: a scheduled task on Windows, a LaunchAgent on
 //! macOS, and an XDG autostart entry elsewhere.
 
 use std::io;
@@ -22,116 +22,198 @@ pub fn disable() -> io::Result<()> {
 
 #[cfg(windows)]
 mod platform {
-    use std::io;
-    use std::path::{Path, PathBuf};
+    //! A logon-triggered scheduled task, not a `Run` registry value. A packaged host
+    //! such as the Claude desktop app copies the `HKCU` writes its child processes
+    //! make into a private hive, so a `Run` value written from inside it never
+    //! reaches the real profile and the agent would not start at login. The Task
+    //! Scheduler keeps one store for the machine that the redirection leaves alone,
+    //! so a task works wherever `flash install` runs from, and it starts on battery
+    //! as well as on mains power.
 
-    use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
+    use std::io;
+    use std::os::windows::process::CommandExt;
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
     use windows_sys::Win32::System::Registry::{
-        HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_OPTION_NON_VOLATILE, REG_SAM_FLAGS, REG_SZ,
-        RegCloseKey, RegCreateKeyExW, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW,
+        HKEY, HKEY_CURRENT_USER, KEY_SET_VALUE, RegCloseKey, RegDeleteValueW, RegOpenKeyExW,
     };
 
     use crate::system::wide;
 
+    /// The task's name; it appears as `\Claude Flash` in the Task Scheduler.
+    const TASK: &str = "Claude Flash";
+    /// Where versions up to 2.2.0 registered the agent. `enable` clears it.
     const RUN: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-    const VALUE: &str = "Claude Flash";
-
-    struct Key(HKEY);
-
-    impl Drop for Key {
-        fn drop(&mut self) {
-            // SAFETY: the key came from RegOpenKeyExW or RegCreateKeyExW and is
-            // closed exactly once.
-            unsafe { RegCloseKey(self.0) };
-        }
-    }
-
-    fn check(status: u32) -> io::Result<()> {
-        if status == ERROR_SUCCESS { Ok(()) } else { Err(io::Error::from_raw_os_error(status as i32)) }
-    }
-
-    fn open(access: REG_SAM_FLAGS) -> io::Result<Key> {
-        let subkey = wide(RUN);
-        let mut key: HKEY = std::ptr::null_mut();
-        // SAFETY: `subkey` is NUL-terminated UTF-16 and `key` is a valid out-pointer.
-        check(unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, subkey.as_ptr(), 0, access, &mut key) })?;
-        Ok(Key(key))
-    }
-
-    /// Opens the key for writing, creating it on a profile that has never had one.
-    fn create() -> io::Result<Key> {
-        let subkey = wide(RUN);
-        let mut key: HKEY = std::ptr::null_mut();
-        // SAFETY: `subkey` is NUL-terminated UTF-16, the class, the security
-        // attributes and the disposition may be null, and `key` is a valid
-        // out-pointer.
-        check(unsafe {
-            RegCreateKeyExW(
-                HKEY_CURRENT_USER,
-                subkey.as_ptr(),
-                0,
-                std::ptr::null(),
-                REG_OPTION_NON_VOLATILE,
-                KEY_SET_VALUE,
-                std::ptr::null(),
-                &mut key,
-                std::ptr::null_mut(),
-            )
-        })?;
-        Ok(Key(key))
-    }
+    const RUN_VALUE: &str = "Claude Flash";
+    /// No console window for the `schtasks` child.
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
     pub fn registered() -> Option<PathBuf> {
-        let key = open(KEY_QUERY_VALUE).ok()?;
-        let name = wide(VALUE);
-        let (mut kind, mut size) = (0u32, 0u32);
-        // SAFETY: with a null data pointer the call reports only the type and size.
-        let status = unsafe {
-            RegQueryValueExW(key.0, name.as_ptr(), std::ptr::null(), &mut kind, std::ptr::null_mut(), &mut size)
-        };
-        if check(status).is_err() || kind != REG_SZ {
-            return None;
-        }
-        let mut buf = vec![0u16; (size as usize).div_ceil(2)];
-        // SAFETY: `buf` has room for `size` bytes.
-        let status = unsafe {
-            RegQueryValueExW(key.0, name.as_ptr(), std::ptr::null(), &mut kind, buf.as_mut_ptr().cast(), &mut size)
-        };
-        check(status).ok()?;
-        let command = String::from_utf16_lossy(&buf);
-        Some(PathBuf::from(program_of(command.trim_end_matches('\0'))))
+        let xml = schtasks(&["/Query", "/TN", TASK, "/XML", "ONE"]).ok()?;
+        let command = between(&xml, "<Command>", "</Command>")?;
+        Some(PathBuf::from(unescape(command.trim())))
     }
 
     pub fn enable(agent: &Path) -> io::Result<()> {
-        let key = create()?;
-        let name = wide(VALUE);
-        let command = wide(format!("\"{}\"", agent.display()));
-        let bytes = u32::try_from(command.len() * 2).map_err(|_| io::Error::other("path too long"))?;
-        // SAFETY: `command` is `bytes` bytes of NUL-terminated UTF-16.
-        check(unsafe { RegSetValueExW(key.0, name.as_ptr(), 0, REG_SZ, command.as_ptr().cast(), bytes) })
+        let file = std::env::temp_dir().join(format!("claude-flash-task-{}.xml", std::process::id()));
+        std::fs::write(&file, utf16_le_bom(&task_definition(agent)))?;
+        let created = schtasks(&["/Create", "/TN", TASK, "/XML", file.to_string_lossy().as_ref(), "/F"]);
+        let _ = std::fs::remove_file(&file);
+        created?;
+        // A login item an earlier version left in the registry would start a second
+        // agent, so it goes now that the task has taken over.
+        remove_run_value();
+        Ok(())
     }
 
     pub fn disable() -> io::Result<()> {
-        let key = match open(KEY_SET_VALUE) {
-            Ok(key) => key,
-            // A profile without the key has no value to remove.
-            Err(e) if e.raw_os_error() == Some(ERROR_FILE_NOT_FOUND as i32) => return Ok(()),
-            Err(e) => return Err(e),
-        };
-        let name = wide(VALUE);
-        // SAFETY: `name` is NUL-terminated UTF-16.
-        match unsafe { RegDeleteValueW(key.0, name.as_ptr()) } {
-            ERROR_SUCCESS | ERROR_FILE_NOT_FOUND => Ok(()),
-            status => check(status),
+        remove_run_value();
+        match schtasks(&["/Delete", "/TN", TASK, "/F"]) {
+            Ok(_) => Ok(()),
+            // Deleting a task that was never there is not a failure.
+            Err(_) if registered().is_none() => Ok(()),
+            Err(e) => Err(e),
         }
     }
 
-    /// The program in a `Run` command line, without its quotes or arguments.
-    fn program_of(command: &str) -> &str {
-        let command = command.trim();
-        match command.strip_prefix('"') {
-            Some(rest) => rest.split('"').next().unwrap_or(rest),
-            None => command.split(' ').next().unwrap_or(command),
+    /// Runs `schtasks.exe`, returning its standard output when it succeeds.
+    fn schtasks(args: &[&str]) -> io::Result<String> {
+        let output = Command::new("schtasks.exe").args(args).creation_flags(CREATE_NO_WINDOW).output()?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+        } else {
+            Err(io::Error::other(String::from_utf8_lossy(&output.stderr).trim().to_owned()))
+        }
+    }
+
+    /// A task that starts the agent at logon for the current user, at normal
+    /// privilege, on battery as well as on mains power.
+    fn task_definition(agent: &Path) -> String {
+        let user = escape(&current_user());
+        let command = escape(&agent.display().to_string());
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Starts the Claude Flash agent when you sign in.</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <UserId>{user}</UserId>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>{user}</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <StartWhenAvailable>false</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{command}</Command>
+    </Exec>
+  </Actions>
+</Task>
+"#
+        )
+    }
+
+    /// `DOMAIN\user`, or just the user name when there is no domain.
+    fn current_user() -> String {
+        let var = |name: &str| std::env::var(name).ok().filter(|value| !value.is_empty());
+        match (var("USERDOMAIN"), var("USERNAME")) {
+            (Some(domain), Some(name)) => format!("{domain}\\{name}"),
+            (_, Some(name)) => name,
+            (_, None) => String::new(),
+        }
+    }
+
+    /// Removes the `Run` value an earlier version wrote, if it is there.
+    fn remove_run_value() {
+        let subkey = wide(RUN);
+        let mut key: HKEY = std::ptr::null_mut();
+        // SAFETY: `subkey` is NUL-terminated UTF-16 and `key` is a valid out-pointer.
+        if unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, subkey.as_ptr(), 0, KEY_SET_VALUE, &mut key) } == ERROR_SUCCESS {
+            let name = wide(RUN_VALUE);
+            // SAFETY: `key` is open for writing and `name` is NUL-terminated UTF-16.
+            unsafe {
+                RegDeleteValueW(key, name.as_ptr());
+                RegCloseKey(key);
+            }
+        }
+    }
+
+    /// The text between the first `open` and the next `close`.
+    fn between<'a>(text: &'a str, open: &str, close: &str) -> Option<&'a str> {
+        let start = text.find(open)? + open.len();
+        let end = start + text[start..].find(close)?;
+        Some(&text[start..end])
+    }
+
+    fn escape(s: &str) -> String {
+        s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    }
+
+    fn unescape(s: &str) -> String {
+        s.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+    }
+
+    /// UTF-16 little-endian with a byte-order mark, which `schtasks /XML` expects.
+    fn utf16_le_bom(s: &str) -> Vec<u8> {
+        let mut bytes = vec![0xFF, 0xFE];
+        for unit in s.encode_utf16() {
+            bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+        bytes
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn the_task_starts_the_agent_at_logon_on_battery() {
+            let path = r"C:\Users\a b\AppData\Local\Microsoft\WindowsApps\flash-agent.exe";
+            let xml = task_definition(Path::new(path));
+            assert!(xml.contains("<LogonTrigger>"));
+            assert!(xml.contains("<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>"));
+            assert_eq!(unescape(between(&xml, "<Command>", "</Command>").unwrap()), path);
+        }
+
+        #[test]
+        fn a_path_with_xml_characters_is_escaped_then_recovered() {
+            let path = r"C:\a & b\<x>\flash-agent.exe";
+            let xml = task_definition(Path::new(path));
+            assert!(!xml.contains(r"<x>\"), "the raw characters must not reach the XML");
+            assert_eq!(unescape(between(&xml, "<Command>", "</Command>").unwrap()), path);
+        }
+
+        #[test]
+        fn utf16_starts_with_a_byte_order_mark() {
+            let bytes = utf16_le_bom("Ab");
+            assert_eq!(bytes, vec![0xFF, 0xFE, b'A', 0, b'b', 0]);
         }
     }
 }

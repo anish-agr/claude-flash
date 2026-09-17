@@ -20,7 +20,7 @@ undoes them:
 |---|---|---|
 | Programs | `%LOCALAPPDATA%\Microsoft\WindowsApps`, or Scoop's folder | `~/.local/bin`, or Homebrew's folder |
 | Settings and journal | `~\.claude-flash` | `~/Library/Application Support/claude-flash` |
-| Start at login | A `Run` registry value | A LaunchAgent |
+| Start at login | A scheduled task | A LaunchAgent |
 | Claude Code hooks | `~/.claude/settings.json`, with a backup beside it | The same |
 
 The agent listens only on this machine. Its journal records event names, signal

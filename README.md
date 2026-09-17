@@ -150,8 +150,8 @@ In PowerShell, write the folder as `$HOME\.cargo\bin`.
 3. Adds hooks to `~/.claude/settings.json`. Every other setting and every other
    tool's hooks keep their content and their position, and the previous file is
    saved next to it as `settings.json.claude-flash-backup`.
-4. Registers the agent to start at login: a `Run` registry value on Windows, a
-   LaunchAgent on macOS.
+4. Registers the agent to start at login: a scheduled task on Windows, a LaunchAgent
+   on macOS.
 5. Starts the agent.
 
 | Option | Effect |
