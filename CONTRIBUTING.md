@@ -8,6 +8,8 @@
 | `crates/claude-flash` | The `flash` CLI and the `flash-agent` background process: HTTP server, runtime, journal, and the Windows and macOS front ends. |
 | `spec/scenarios` | The engine's behaviour, as JSON scenarios run by `crates/flash-core/tests/scenarios.rs`. |
 | `docs` | Reference documentation. |
+| `packaging` | The Homebrew formula and the Scoop manifest. |
+| `scripts/update-packages.sh` | Points both at a published release. |
 
 ## Checks
 
@@ -56,3 +58,25 @@ scenario before the suite passes.
 
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/):
 `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `ci:`, `chore:`.
+
+## Releasing
+
+1. Move the changelog's Unreleased entries under the new version and date, set
+   `version` in `Cargo.toml`, and commit.
+2. Tag the commit and push the tag. The release workflow builds the three archives,
+   writes `SHA256SUMS` and publishes the release, with the changelog entry as its
+   notes.
+
+   ```bash
+   git tag -a v2.2.0 -m "Claude Flash 2.2.0" && git push origin v2.2.0
+   ```
+
+3. Once the release is published, point the packages at it and commit the result:
+
+   ```bash
+   scripts/update-packages.sh 2.2.0
+   ```
+
+4. Copy `packaging/homebrew/claude-flash.rb` to `Formula/claude-flash.rb` in
+   [anish-agr/homebrew-tap](https://github.com/anish-agr/homebrew-tap). Scoop reads
+   the manifest straight from this repository.

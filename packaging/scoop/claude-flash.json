@@ -1,0 +1,29 @@
+{
+    "version": "2.2.0",
+    "description": "Screen flashes when Claude Code finishes, asks, needs approval or fails",
+    "homepage": "https://github.com/anish-agr/claude-flash",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/anish-agr/claude-flash/releases/download/v2.2.0/claude-flash-windows-x64.zip",
+            "hash": "6b3ad0c11f75b97c4a600a81a7fc844ba84106749f2d2fb3bbfd9440a91ddd18"
+        }
+    },
+    "bin": "flash.exe",
+    "notes": [
+        "To add the Claude Code hooks and start the agent, now and at every login, run: flash install",
+        "To update: flash agent stop, then scoop update claude-flash, then flash agent start",
+        "Before scoop uninstall claude-flash, run: flash uninstall"
+    ],
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/anish-agr/claude-flash/releases/download/v$version/claude-flash-windows-x64.zip"
+            }
+        },
+        "hash": {
+            "url": "$baseurl/SHA256SUMS"
+        }
+    }
+}
