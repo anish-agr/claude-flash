@@ -4,7 +4,7 @@ Notable changes to Claude Flash. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.2.0] - 2026-09-16
 
 ### Added
 
@@ -18,6 +18,8 @@ Notable changes to Claude Flash. The format follows
   hooks were already current. Those sessions reach the new agent as they are.
 - `flash install` no longer says the programs are not on the `PATH` when a link or
   a shim on the `PATH` already runs them.
+- `flash install` and `flash uninstall` work on a Windows profile that has never had
+  a `Run` registry key. They stopped at the login item before.
 
 ## [2.1.0] - 2026-09-11
 

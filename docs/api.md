@@ -82,7 +82,7 @@ Errors are JSON with a message:
 Whether an agent is listening, and which.
 
 ```json
-{ "name": "claude-flash", "version": "2.1.0", "api": 1, "pid": 20412 }
+{ "name": "claude-flash", "version": "2.2.0", "api": 1, "pid": 20412 }
 ```
 
 ## `POST /v1/hooks/claude-code`
@@ -103,7 +103,7 @@ successful hook with no decision.
 
 ```json
 {
-  "version": "2.1.0",
+  "version": "2.2.0",
   "pid": 20412,
   "port": 47823,
   "started": "2026-09-11T08:02:11.304Z",
