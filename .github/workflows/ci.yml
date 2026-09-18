@@ -133,11 +133,15 @@ jobs:
         run: |
           target/release/flash agent stop || true
           cat "$CLAUDE_FLASH_HOME/agent.log" || true
-      - name: Remove the login items key (Windows)
+      - name: Clear any leftover login item (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        # Some profiles have never had this key, and the installer has to create it.
-        run: Remove-Item -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Recurse -Force -ErrorAction SilentlyContinue
+        # A fresh install must set up start-at-login from nothing: no Run value and no
+        # scheduled task to begin with.
+        run: |
+          Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Claude Flash' -ErrorAction SilentlyContinue
+          schtasks /Delete /TN 'Claude Flash' /F 2>$null
+          exit 0
       - name: Install and uninstall as a user would
         shell: bash
         run: |
@@ -146,7 +150,18 @@ jobs:
           mkdir -p ~/.claude
           target/release/flash install
           target/release/flash status
+          if [ "$RUNNER_OS" = Windows ]; then
+            schtasks //Query //TN "Claude Flash" > /dev/null
+            echo "start-at-login task created"
+          fi
           target/release/flash uninstall --purge
+          if [ "$RUNNER_OS" = Windows ]; then
+            if schtasks //Query //TN "Claude Flash" > /dev/null 2>&1; then
+              echo "the scheduled task is still there after uninstall" >&2
+              exit 1
+            fi
+            echo "start-at-login task removed"
+          fi
       - uses: actions/upload-artifact@v7
         if: always()
         with:
