@@ -123,7 +123,18 @@ pub fn uninstall(env: &Env, args: &UninstallArgs) -> Outcome {
         step("shortcut", "removed from the desktop");
     }
     if args.purge {
-        for dir in [&env.paths.data_dir, &env.paths.config_dir] {
+        // The data and config directories are the same folder today; an older Windows
+        // install's folder is cleared as well.
+        let mut targets = vec![env.paths.data_dir.clone()];
+        if env.paths.config_dir != env.paths.data_dir {
+            targets.push(env.paths.config_dir.clone());
+        }
+        if let Some(legacy) = paths::legacy_data_dir()
+            && !targets.contains(&legacy)
+        {
+            targets.push(legacy);
+        }
+        for dir in &targets {
             match fs::remove_dir_all(dir) {
                 Ok(()) => step("data", &format!("deleted {}", paths::display(dir))),
                 Err(e) if e.kind() == io::ErrorKind::NotFound => {}

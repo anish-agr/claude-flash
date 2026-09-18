@@ -110,12 +110,40 @@ pub fn relocate_legacy_data(active: &Paths) {
             return;
         }
         // Only move a real install, not an empty leftover folder.
-        if old.join("config.toml").exists() || old.join("token").exists() {
-            let _ = copy_tree_missing(&old, &default_home);
+        if (old.join("config.toml").exists() || old.join("token").exists())
+            && copy_tree_missing(&old, &default_home).is_ok()
+            && migrated(&old, &default_home)
+        {
+            // The settings and token are safely across, so the old folder goes rather
+            // than lingering as a private copy the app alone can see.
+            let _ = fs::remove_dir_all(&old);
         }
     }
     #[cfg(not(windows))]
     let _ = active;
+}
+
+/// The folder a Windows install before this one used, so `uninstall --purge` can
+/// clear it too. `None` on macOS and Linux, which never changed location.
+pub fn legacy_data_dir() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        Some(legacy_windows_data_dir())
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
+/// Whether the settings and, if there was one, the token reached `new`.
+#[cfg(windows)]
+fn migrated(old: &Path, new: &Path) -> bool {
+    if !new.join("config.toml").exists() {
+        return false;
+    }
+    let old_token = old.join("token");
+    !old_token.exists() || matches!((fs::read(&old_token), fs::read(new.join("token"))), (Ok(a), Ok(b)) if a == b)
 }
 
 /// Copies every file under `from` into `to` that `to` does not already have,

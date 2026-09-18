@@ -28,6 +28,9 @@ Notable changes to Claude Flash. The format follows
   restart, instead of claiming the running agent applies them within a second.
 - A 401 from the agent now suggests `flash install` and a restart, rather than only
   repeating the server's "missing or incorrect API token".
+- After moving a Windows install to `~\.claude-flash`, the old `%LOCALAPPDATA%`
+  folder is removed once the token and settings are safely across, and `flash
+  uninstall --purge` clears it as well.
 
 ## [2.2.0] - 2026-09-16
 
