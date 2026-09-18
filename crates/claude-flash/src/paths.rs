@@ -1,7 +1,9 @@
 //! Where Claude Flash keeps its files.
 
 use std::env;
+#[cfg(windows)]
 use std::fs;
+#[cfg(windows)]
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -147,7 +149,9 @@ fn migrated(old: &Path, new: &Path) -> bool {
 }
 
 /// Copies every file under `from` into `to` that `to` does not already have,
-/// recursing into subfolders. An existing file in `to` is kept as it is.
+/// recursing into subfolders. An existing file in `to` is kept as it is. Only the
+/// Windows relocation uses it.
+#[cfg(windows)]
 fn copy_tree_missing(from: &Path, to: &Path) -> io::Result<()> {
     if !from.is_dir() {
         return Ok(());
@@ -204,6 +208,7 @@ mod tests {
         assert!(!display(Path::new("/definitely/elsewhere")).starts_with('~'));
     }
 
+    #[cfg(windows)]
     #[test]
     fn relocation_fills_gaps_and_keeps_what_is_already_there() {
         let root = env::temp_dir().join(format!("cf-relocate-{}", std::process::id()));
