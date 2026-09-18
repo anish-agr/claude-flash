@@ -33,8 +33,8 @@ Endpoints are then split by what they can do:
 
 The token is 32 random bytes from the operating system, stored in the data
 directory. On macOS and Linux the file is created with mode `0600`; on Windows it
-sits in the user's local application data folder, which only that user can read.
-Token comparison runs in constant time.
+sits in the user's profile folder (`~\.claude-flash`), which only that user can
+read. Token comparison runs in constant time.
 
 While the agent is on loopback the hook endpoint needs no token, because Claude
 Code's HTTP hooks have nowhere secure to read one from. Any process running on the
@@ -82,3 +82,20 @@ When `push.url` is set, signals raised while you are away are sent there with th
 system `curl`. The request, including any token, is passed on curl's standard
 input rather than its command line, so other users cannot see it in the process
 list. Header values are stripped of control characters before they are sent.
+
+## Code signing
+
+The released `flash.exe` and `flash-agent.exe` are not yet Authenticode-signed.
+Windows SmartScreen acts only on the "downloaded from the internet" mark, which the
+install steps clear, but **Smart App Control** judges the programs themselves: it
+runs code it recognises or that carries a valid signature, and blocks unsigned code
+it does not recognise, with no per-program exception. A signature on an installer
+would not help, because Smart App Control checks every executable, so both programs
+have to be signed.
+
+The plan is to sign both binaries in the release workflow with a certificate from
+the [SignPath Foundation](https://signpath.org/), which provides free OV code
+signing to open-source projects through a GitHub Actions integration and keeps the
+private key in its own HSM. Until that is in place, users whom Smart App Control
+blocks can turn it off or build from source, as
+[docs/getting-started.md](docs/getting-started.md#if-something-is-wrong) describes.

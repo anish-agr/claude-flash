@@ -262,13 +262,25 @@ again.
 coming from the internet, and SmartScreen acts on that mark. Run `Unblock-File` on
 the zip and extract it again.
 
-**Everything stopped on Windows.** Smart App Control, when it is on, judges
-unsigned programs by reputation, allows no exception for a single program, and can
-start blocking one days after it first ran. Flashes stop, new Claude Code sessions
-report a hook error, and `flash` will not start. A build it has not blocked, such
-as one built from source, works again; so does turning Smart App Control off in
-Windows Security under **App & browser control**, which recent Windows 11 updates
-let you turn back on again without resetting the PC.
+**Smart App Control blocks Claude Flash.** Smart App Control (Windows 11) allows
+programs it recognises and blocks unsigned ones it does not. It offers no per-program
+exception, and it can start blocking a program days after it first ran. When it does,
+flashes stop, new Claude Code sessions report a hook error, and `flash` will not
+start. To confirm it is the cause, open Event Viewer and look under **Applications
+and Services Logs → Microsoft → Windows → CodeIntegrity → Operational** for a recent
+entry that names `flash.exe` or `flash-agent.exe`.
+
+Two ways forward:
+
+- **Turn Smart App Control off.** Open **Windows Security → App & browser control →
+  Smart App Control settings** and set it to Off, then start the agent with `flash
+  agent start`. Recent Windows 11 updates let you turn it back on later without
+  resetting the PC; turning it on again blocks the unsigned programs once more.
+- **Build from source** (see the [README](../README.md#from-source)). A build Smart
+  App Control has not seen before runs, though it too may be blocked later.
+
+Signed releases, which Smart App Control trusts on sight, are the durable fix and are
+planned; see [SECURITY.md](../SECURITY.md#code-signing).
 
 **A terminal says `missing or incorrect API token`, but flashes still work.** You
 installed Claude Flash from inside a packaged app, such as the Claude desktop app,
