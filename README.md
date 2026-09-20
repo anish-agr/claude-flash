@@ -122,12 +122,15 @@ both platforms, and how to report a problem.
 
 The programs are not code-signed. Downloaded with `curl` as above, they carry no
 quarantine flag on macOS and no downloaded-from-the-internet mark on Windows, so
-Gatekeeper and SmartScreen have nothing to act on. Smart App Control, when it is
-on, blocks unsigned programs however they arrived.
+Gatekeeper and SmartScreen have nothing to act on. Smart App Control, which some
+Windows 11 machines have on, blocks unsigned programs however they arrived,
+including ones you build yourself; [Troubleshooting](#troubleshooting) says how to
+recognise it.
 
 ### From source
 
-With Rust 1.88 or later:
+With Rust 1.88 or later. Cargo clones the repository, builds both programs and puts
+them in `~/.cargo/bin`, which its own installer already added to your `PATH`:
 
 ```bash
 cargo install --locked --git https://github.com/anish-agr/claude-flash claude-flash
@@ -137,7 +140,12 @@ cargo install --locked --git https://github.com/anish-agr/claude-flash claude-fl
 flash install --bin-dir ~/.cargo/bin
 ```
 
-In PowerShell, write the folder as `$HOME\.cargo\bin`.
+In PowerShell, write the folder as `$HOME\.cargo\bin`. `--bin-dir` keeps the
+programs where Cargo put them, so `cargo install` again picks up a new version
+without leaving an older copy behind.
+
+A build of your own is still an unsigned program, so it is no way around Smart App
+Control; see [Troubleshooting](#troubleshooting).
 
 ### What `flash install` does
 
@@ -501,13 +509,15 @@ archive downloaded in a browser is marked as coming from the internet: on Window
 run `Unblock-File` on the zip before extracting it, and on macOS, run
 `xattr -dr com.apple.quarantine` on the extracted folder.
 
-**Everything stopped on Windows, and `flash` will not start.** Smart App Control
-judges unsigned programs by reputation, allows no exception for a single program,
-and can start blocking one days after it first ran. Flashes then stop, and new
-Claude Code sessions report a hook error. Until releases are code-signed, the fixes
-are a build it has not blocked, such as one built from source, or turning Smart App
-Control off in Windows Security; recent Windows 11 updates let you turn it back on
-again without resetting the PC.
+**Everything stopped on Windows, and `flash` will not start.** Smart App Control, on
+Windows 11, blocks unsigned programs, allows no exception for a single one, and can
+start blocking a program days after it first ran. Flashes stop, new Claude Code
+sessions report a hook error, and starting the agent reports `An Application Control
+policy has blocked this file`. Building from source does not get around it, because
+that build is unsigned too. Signing the releases is the fix and is under way; see
+[SECURITY.md](SECURITY.md#code-signing).
+[docs/getting-started.md](docs/getting-started.md#if-something-is-wrong) has the
+Event Viewer check that confirms Smart App Control is the cause.
 
 **A terminal reports `missing or incorrect API token`, but flashes still work.** You
 installed from inside a packaged app, such as the Claude desktop app, which keeps a

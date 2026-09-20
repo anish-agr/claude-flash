@@ -262,25 +262,29 @@ again.
 coming from the internet, and SmartScreen acts on that mark. Run `Unblock-File` on
 the zip and extract it again.
 
-**Smart App Control blocks Claude Flash.** Smart App Control (Windows 11) allows
-programs it recognises and blocks unsigned ones it does not. It offers no per-program
-exception, and it can start blocking a program days after it first ran. When it does,
-flashes stop, new Claude Code sessions report a hook error, and `flash` will not
-start. To confirm it is the cause, open Event Viewer and look under **Applications
-and Services Logs → Microsoft → Windows → CodeIntegrity → Operational** for a recent
+**Smart App Control blocks Claude Flash.** Smart App Control allows programs it
+recognises and blocks unsigned ones it does not. It judges each executable on its
+own, offers no per-program exception, and can start blocking a program days after it
+first ran. When it does, flashes stop, new Claude Code sessions report a hook error,
+and a command that starts the agent reports `An Application Control policy has
+blocked this file`.
+
+To confirm it is the cause, open Event Viewer and look under **Applications and
+Services Logs → Microsoft → Windows → CodeIntegrity → Operational** for a recent
 entry that names `flash.exe` or `flash-agent.exe`.
 
-Two ways forward:
+There is nothing to change on this side of it. Smart App Control trusts a program
+that carries a valid code-signing signature, and these releases carry none yet;
+[SECURITY.md](../SECURITY.md#code-signing) describes the certificate being applied
+for. Building from source is not a way out, because the build is unsigned as well:
+Smart App Control blocks freshly built copies on the maintainer's own machine.
+Installing through Scoop or WinGet changes nothing either, since what is blocked is
+the executable rather than how it arrived.
 
-- **Turn Smart App Control off.** Open **Windows Security → App & browser control →
-  Smart App Control settings** and set it to Off, then start the agent with `flash
-  agent start`. Recent Windows 11 updates let you turn it back on later without
-  resetting the PC; turning it on again blocks the unsigned programs once more.
-- **Build from source** (see the [README](../README.md#from-source)). A build Smart
-  App Control has not seen before runs, though it too may be blocked later.
-
-Signed releases, which Smart App Control trusts on sight, are the durable fix and are
-planned; see [SECURITY.md](../SECURITY.md#code-signing).
+Smart App Control is a Windows 11 feature, and only a clean install of Windows 11
+turns it on; upgraded machines and every Windows 10 machine have it off. Whether it
+is on for you is shown in **Windows Security → App & browser control → Smart App
+Control settings**.
 
 **A terminal says `missing or incorrect API token`, but flashes still work.** You
 installed Claude Flash from inside a packaged app, such as the Claude desktop app,

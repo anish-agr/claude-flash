@@ -40,6 +40,10 @@ Notable changes to Claude Flash. The format follows
   uninstall --purge` clears it as well.
 - `flash` finds `flash-agent` when it was started through an alias that only points
   at `flash`, which is how WinGet puts a portable package on `PATH`.
+- The Smart App Control advice no longer suggests turning it off or building from
+  source. Neither is a way around it: it judges each executable, and an unsigned
+  build of your own is blocked the same way. The docs now say how to recognise a
+  block and point at the signing work.
 
 ## [2.2.0] - 2026-09-16
 

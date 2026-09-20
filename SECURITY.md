@@ -96,6 +96,14 @@ have to be signed.
 The plan is to sign both binaries in the release workflow with a certificate from
 the [SignPath Foundation](https://signpath.org/), which provides free OV code
 signing to open-source projects through a GitHub Actions integration and keeps the
-private key in its own HSM. Until that is in place, users whom Smart App Control
-blocks can turn it off or build from source, as
-[docs/getting-started.md](docs/getting-started.md#if-something-is-wrong) describes.
+private key in its own HSM. Until that is in place there is nothing a user can do
+about a block short of leaving Smart App Control, and these docs do not ask anyone
+to weaken it. [docs/getting-started.md](docs/getting-started.md#if-something-is-wrong)
+says how to recognise a block for what it is.
+
+While the programs are unsigned, each release is also submitted to Microsoft at
+[the file submission portal](https://www.microsoft.com/en-us/wdsi/filesubmission) as
+a developer, which is how an unsigned program's reputation is disputed. It changes
+nothing for a user whose machine has already blocked the file, and Microsoft makes
+no promise about the outcome, so it is a step alongside signing rather than a
+substitute for it.
