@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Points the Scoop manifest and the Homebrew formula at a published release, using
-# the checksums the release workflow uploaded.
+# Points the Scoop manifest, the Homebrew formula and the WinGet manifests at a
+# published release, using the checksums the release workflow uploaded.
 #
 #   scripts/update-packages.sh 2.2.0
 set -euo pipefail
@@ -31,5 +31,20 @@ sed -i.bak -E \
   "$root/packaging/homebrew/claude-flash.rb"
 rm -f "$root/packaging/scoop/claude-flash.json.bak" "$root/packaging/homebrew/claude-flash.rb.bak"
 
-echo "Scoop manifest and Homebrew formula now point at v$version."
+# WinGet wants the checksum in upper case and carries the version in all three files.
+windows_upper="$(printf '%s' "$windows" | tr 'a-f' 'A-F')"
+released="$(date -u +%F)"
+for manifest in "$root"/packaging/winget/*.yaml; do
+  sed -i.bak -E \
+    -e "s/^PackageVersion: .*/PackageVersion: $version/" \
+    -e "s#/download/v[0-9][^/]*/#/download/v$version/#" \
+    -e "s/^    InstallerSha256: [0-9A-Fa-f]{64}/    InstallerSha256: $windows_upper/" \
+    -e "s/^ReleaseDate: .*/ReleaseDate: $released/" \
+    -e "s#^ReleaseNotesUrl: (.*)/tag/v.*#ReleaseNotesUrl: \\1/tag/v$version#" \
+    "$manifest"
+  rm -f "$manifest.bak"
+done
+
+echo "Scoop, Homebrew and WinGet manifests now point at v$version."
 echo "Copy packaging/homebrew/claude-flash.rb to Formula/claude-flash.rb in anish-agr/homebrew-tap."
+echo "For WinGet, see packaging/README.md."

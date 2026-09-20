@@ -158,11 +158,16 @@ enum PackageManager {
     /// `ROOT/apps/claude-flash/VERSION/flash.exe`, where `current` stands for the
     /// version in use.
     Scoop { app: PathBuf },
+    /// `%LOCALAPPDATA%\Microsoft\WinGet\Packages\ID_SOURCE\flash.exe`, reached
+    /// through an alias in the neighbouring `Links` folder. The folder's name has no
+    /// version in it, so an upgrade replaces the programs where they stand.
+    WinGet { package: PathBuf },
 }
 
 impl PackageManager {
     /// Looks at the path the program was started from, then at the file it leads
-    /// to: a Scoop shim starts it through `current`, Homebrew through a link.
+    /// to: a Scoop shim starts it through `current`, Homebrew and WinGet through a
+    /// link.
     fn find(exe: &Path) -> Option<PackageManager> {
         PackageManager::detect(exe).or_else(|| PackageManager::detect(&fs::canonicalize(exe).ok()?))
     }
@@ -175,6 +180,8 @@ impl PackageManager {
                 Some(PackageManager::Homebrew { prefix: parts[..i].iter().collect() })
             } else if is(i, "apps") && is(i + 1, "claude-flash") && parts.len() == i + 4 {
                 Some(PackageManager::Scoop { app: parts[..i + 2].iter().collect() })
+            } else if is(i, "WinGet") && is(i + 1, "Packages") && parts.len() == i + 4 {
+                Some(PackageManager::WinGet { package: parts[..i + 3].iter().collect() })
             } else {
                 None
             }
@@ -187,6 +194,7 @@ impl PackageManager {
         match self {
             PackageManager::Homebrew { prefix } => prefix.join("bin"),
             PackageManager::Scoop { app } => app.join("current"),
+            PackageManager::WinGet { package } => package.clone(),
         }
     }
 
@@ -194,6 +202,7 @@ impl PackageManager {
         match self {
             PackageManager::Homebrew { .. } => "brew uninstall claude-flash",
             PackageManager::Scoop { .. } => "scoop uninstall claude-flash",
+            PackageManager::WinGet { .. } => "winget uninstall anish-agr.ClaudeFlash",
         }
     }
 }
@@ -397,7 +406,7 @@ mod tests {
     }
 
     #[test]
-    fn recognises_homebrew_and_scoop_installs() {
+    fn recognises_a_package_manager_install() {
         assert_eq!(
             detect("/opt/homebrew/Cellar/claude-flash/2.1.1/bin/flash"),
             Some(PackageManager::Homebrew { prefix: PathBuf::from("/opt/homebrew") })
@@ -414,6 +423,11 @@ mod tests {
             detect("C:/Users/a/Scoop/Apps/Claude-Flash/2.1.1/flash.exe"),
             Some(PackageManager::Scoop { app: PathBuf::from("C:/Users/a/Scoop/Apps/Claude-Flash") })
         );
+        let package = "C:/Users/a/AppData/Local/Microsoft/WinGet/Packages/anish-agr.ClaudeFlash_Source_8wekyb3d8bbwe";
+        assert_eq!(
+            detect(&format!("{package}/flash.exe")),
+            Some(PackageManager::WinGet { package: PathBuf::from(package) })
+        );
     }
 
     #[test]
@@ -422,6 +436,7 @@ mod tests {
             "/Users/a/.local/bin/flash",
             "/opt/homebrew/bin/flash",
             "C:/Users/a/AppData/Local/Microsoft/WindowsApps/flash.exe",
+            "C:/Users/a/AppData/Local/Microsoft/WinGet/Links/flash.exe",
             "/Users/a/apps/claude-flash/flash",
             "/Users/a/Cellar/other-tool/1.0/bin/flash",
         ] {
@@ -435,6 +450,10 @@ mod tests {
         assert!(hint("/opt/homebrew/Cellar/claude-flash/2.1.1/bin/flash").contains("`brew uninstall claude-flash`"));
         assert!(
             hint("C:/Users/a/scoop/apps/claude-flash/current/flash.exe").contains("`scoop uninstall claude-flash`")
+        );
+        assert!(
+            hint("C:/Users/a/AppData/Local/Microsoft/WinGet/Packages/anish-agr.ClaudeFlash_S/flash.exe")
+                .contains("`winget uninstall anish-agr.ClaudeFlash`")
         );
         assert!(hint("/Users/a/.local/bin/flash").starts_with("Delete flash and flash-agent from"));
     }

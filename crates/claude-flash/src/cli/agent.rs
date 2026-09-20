@@ -75,12 +75,20 @@ pub fn run(env: &Env, action: AgentAction) -> Outcome {
 /// `flash-agent`, which lives next to `flash`.
 pub fn agent_program() -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| format!("cannot locate this executable: {e}"))?;
-    let agent = exe.with_file_name(format!("flash-agent{}", std::env::consts::EXE_SUFFIX));
+    let name = format!("flash-agent{}", std::env::consts::EXE_SUFFIX);
+    let agent = exe.with_file_name(&name);
     if agent.is_file() {
-        Ok(agent)
-    } else {
-        Err(format!("{} not found; flash-agent belongs next to flash", agent.display()))
+        return Ok(agent);
     }
+    // A package manager can put an alias on `PATH` that only points at the program,
+    // as WinGet does; the other one is next to the file the alias leads to.
+    if let Ok(real) = std::fs::canonicalize(&exe) {
+        let beside = real.with_file_name(&name);
+        if beside.is_file() {
+            return Ok(beside);
+        }
+    }
+    Err(format!("{} not found; flash-agent belongs next to flash", agent.display()))
 }
 
 /// Starts the agent unless one is running, and waits until it answers.

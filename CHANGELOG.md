@@ -6,6 +6,13 @@ Notable changes to Claude Flash. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- WinGet manifests in `packaging/winget`, so Claude Flash can be published to the
+  Windows Package Manager. `flash install` recognises a WinGet install the way it
+  already recognises Homebrew and Scoop, and leaves the programs where WinGet
+  unpacked them so `winget upgrade` replaces them in place.
+
 ### Changed
 
 - On Windows, Claude Flash now keeps its token, settings and journal in
@@ -31,6 +38,8 @@ Notable changes to Claude Flash. The format follows
 - After moving a Windows install to `~\.claude-flash`, the old `%LOCALAPPDATA%`
   folder is removed once the token and settings are safely across, and `flash
   uninstall --purge` clears it as well.
+- `flash` finds `flash-agent` when it was started through an alias that only points
+  at `flash`, which is how WinGet puts a portable package on `PATH`.
 
 ## [2.2.0] - 2026-09-16
 

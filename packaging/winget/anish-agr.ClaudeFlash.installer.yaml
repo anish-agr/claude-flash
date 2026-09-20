@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+
+PackageIdentifier: anish-agr.ClaudeFlash
+PackageVersion: 2.2.0
+MinimumOSVersion: 10.0.17134.0
+InstallerType: zip
+# The archive holds both programs side by side. WinGet extracts all of it and puts
+# `flash` on PATH; `flash-agent` stays next to it, which is where `flash` looks.
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: flash.exe
+    PortableCommandAlias: flash
+UpgradeBehavior: install
+ReleaseDate: 2026-09-17
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/anish-agr/claude-flash/releases/download/v2.2.0/claude-flash-windows-x64.zip
+    InstallerSha256: 6B3AD0C11F75B97C4A600A81A7FC844BA84106749F2D2FB3BBFD9440A91DDD18
+ManifestType: installer
+ManifestVersion: 1.6.0

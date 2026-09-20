@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+
+PackageIdentifier: anish-agr.ClaudeFlash
+PackageVersion: 2.2.0
+PackageLocale: en-US
+Publisher: anish-agr
+PublisherUrl: https://github.com/anish-agr
+PublisherSupportUrl: https://github.com/anish-agr/claude-flash/issues
+PackageName: Claude Flash
+PackageUrl: https://github.com/anish-agr/claude-flash
+License: MIT
+LicenseUrl: https://github.com/anish-agr/claude-flash/blob/main/LICENSE
+Copyright: Copyright (c) 2026 Anish Agrawal
+ShortDescription: Screen flashes when Claude Code finishes, asks, needs approval or fails
+Description: |-
+  Claude Flash watches Claude Code through its hooks and flashes the edge of every
+  screen when a session finishes a turn, asks a question, needs approval, or hits an
+  error. Each signal has its own colour, so a glance tells you which one it is
+  without reading the terminal. A tray icon turns flashes on and off, `flash log`
+  says what became of every signal, and settings live in one TOML file.
+Moniker: claude-flash
+Tags:
+  - ai
+  - claude
+  - claude-code
+  - cli
+  - developer-tools
+  - hooks
+  - notifications
+  - overlay
+  - rust
+  - terminal
+ReleaseNotesUrl: https://github.com/anish-agr/claude-flash/releases/tag/v2.2.0
+Documentations:
+  - DocumentLabel: Getting started
+    DocumentUrl: https://github.com/anish-agr/claude-flash/blob/main/docs/getting-started.md
+  - DocumentLabel: Configuration
+    DocumentUrl: https://github.com/anish-agr/claude-flash/blob/main/docs/configuration.md
+InstallationNotes: |-
+  Run `flash install` to add the Claude Code hooks and start the agent, now and at
+  every login. Restart any Claude Code session that is already open. Before
+  `winget uninstall`, run `flash uninstall` to take the hooks out again.
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

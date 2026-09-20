@@ -8,8 +8,8 @@
 | `crates/claude-flash` | The `flash` CLI and the `flash-agent` background process: HTTP server, runtime, journal, and the Windows and macOS front ends. |
 | `spec/scenarios` | The engine's behaviour, as JSON scenarios run by `crates/flash-core/tests/scenarios.rs`. |
 | `docs` | Reference documentation. |
-| `packaging` | The Homebrew formula and the Scoop manifest. |
-| `scripts/update-packages.sh` | Points both at a published release. |
+| `packaging` | The Homebrew formula, the Scoop manifest and the WinGet manifests. |
+| `scripts/update-packages.sh` | Points all of them at a published release. |
 
 ## Checks
 
@@ -80,3 +80,13 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 4. Copy `packaging/homebrew/claude-flash.rb` to `Formula/claude-flash.rb` in
    [anish-agr/homebrew-tap](https://github.com/anish-agr/homebrew-tap). Scoop reads
    the manifest straight from this repository.
+
+5. Submit the WinGet manifests, as
+   [packaging/README.md](packaging/README.md) describes.
+
+6. While the Windows programs are unsigned, submit `flash.exe` and
+   `flash-agent.exe` from the release zip to Microsoft at
+   [the file submission portal](https://www.microsoft.com/en-us/wdsi/filesubmission),
+   as a software developer. It is the only route for disputing how an unsigned
+   program is treated, and it has to be done per release because each build is a
+   different file.
