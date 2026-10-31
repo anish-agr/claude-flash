@@ -326,6 +326,33 @@ These follow the same rules as signals from Claude Code: a pause, quiet hours,
 project rules and presence all apply. Other programs can call the local HTTP API
 directly; see [docs/api.md](docs/api.md).
 
+### Codex
+
+Codex keeps hooks in `~/.codex/hooks.json` and names its events the way Claude Code
+does. It runs a command for each one rather than posting to an address, so every
+event runs `flash hook`, which starts the agent if it is not up and hands the event
+over on standard input:
+
+```bash
+flash hooks codex
+```
+
+That writes the file, or prints the entries to merge by hand if the file already
+holds hooks of your own. Codex's own `notify` setting is left alone. Restart any
+Codex session that is already open.
+
+Codex raises the finished-turn and approval signals and keeps `flash status`
+up to date. It has no equivalent of Claude Code's `AskUserQuestion` tool or of
+`StopFailure`, so the question and error signals stay Claude Code's.
+
+How far this is confirmed, as of Codex 0.164: Codex reads and validates the file
+Claude Flash writes, down to clamping a timeout it thinks is too long, and reports no
+complaint about it. Hooks did not run in a non-interactive `codex exec` run, though,
+so check an interactive session before relying on it: start Codex, let a turn finish,
+and run `flash log --since 5m --all`. An entry means the hooks are arriving. Nothing
+there means your Codex does not run them yet, and `flash hooks codex --dry-run`
+shows what was written so you can compare it with your version's documentation.
+
 ### From another machine
 
 Claude Code in WSL, over SSH or on a second computer runs its hooks there, and

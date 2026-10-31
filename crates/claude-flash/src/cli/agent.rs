@@ -67,7 +67,7 @@ pub fn run(env: &Env, action: AgentAction) -> Outcome {
                 println!("{line}");
             }
         }
-        AgentAction::Ensure => ensure(env),
+        AgentAction::Ensure => deliver(env),
     }
     Ok(())
 }
@@ -135,10 +135,14 @@ fn wait_for<T>(limit: Duration, mut probe: impl FnMut() -> Option<T>) -> Option<
     }
 }
 
-/// The SessionStart hook. Whatever happens it prints nothing and succeeds: output
-/// would become part of Claude's context, and a failure would appear in the
-/// transcript.
-fn ensure(env: &Env) {
+/// Delivers a hook event from standard input to the agent, starting the agent first
+/// if it is not already running. Claude Code's `SessionStart` hook runs this, and so
+/// does every Codex hook, because Codex runs a command per event rather than posting
+/// to an address.
+///
+/// Whatever happens it prints nothing and succeeds: output would become part of the
+/// model's context, and a failure would appear in the transcript.
+pub fn deliver(env: &Env) {
     let payload = hook_payload();
     let session = std::env::var(SESSION_ENV_VAR).unwrap_or_default();
     if settings::session_opted_out(&session) {

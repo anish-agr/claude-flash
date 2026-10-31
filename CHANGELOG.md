@@ -13,6 +13,15 @@ Notable changes to Claude Flash. The format follows
   fading to an empty chair. The input that clears it is the same input that ends
   being away, so coming back shows you the signal and dismisses it. A held flash
   appears in `flash log` as `standby approval` rather than `flash approval`.
+- `flash hooks codex` writes a `~/.codex/hooks.json` that points Codex's hooks at the
+  agent, and `flash hook` delivers one event from standard input, which is how a tool
+  that runs a command per event reaches the agent. Codex names its events as Claude
+  Code does, and the engine now reads either spelling, so a Codex
+  `permission-request` and a Claude Code `PermissionRequest` mean the same thing.
+  Codex drives the finished-turn and approval signals; it has no equivalent of
+  `AskUserQuestion` or `StopFailure`, so question and error stay Claude Code's. Codex
+  validates the file but did not run hooks in a non-interactive `codex exec` run, so
+  the README says how to confirm it in an interactive one.
 - WinGet manifests in `packaging/winget`, so Claude Flash can be published to the
   Windows Package Manager. `flash install` recognises a WinGet install the way it
   already recognises Homebrew and Scoop, and leaves the programs where WinGet

@@ -107,7 +107,7 @@ impl HookEvent {
         let obj = value.as_object().ok_or(EventError::NotAnObject)?;
         let text = |key: &str| obj.get(key).and_then(Value::as_str).map(str::to_owned).filter(|s| !s.is_empty());
         Ok(HookEvent {
-            name: text("hook_event_name").ok_or(EventError::MissingEventName)?,
+            name: text("hook_event_name").map(|n| canonical_event(&n)).ok_or(EventError::MissingEventName)?,
             session_id: text("session_id").unwrap_or_else(|| "unknown".to_owned()),
             cwd: text("cwd"),
             permission_mode: text("permission_mode"),
@@ -150,6 +150,25 @@ pub enum Effect {
     SessionStarted,
     SessionEnded,
     Ignored,
+}
+
+/// One spelling for an event, however the agent that sent it writes the name. Claude
+/// Code sends `PermissionRequest`; Codex sends `permission-request` for the same
+/// thing. Hyphens go and every word starts with a capital, which leaves Claude
+/// Code's names exactly as they arrive.
+fn canonical_event(name: &str) -> String {
+    if !name.contains('-') && name.starts_with(|c: char| c.is_ascii_uppercase()) {
+        return name.to_owned();
+    }
+    let mut out = String::with_capacity(name.len());
+    for word in name.split('-').filter(|w| !w.is_empty()) {
+        let mut chars = word.chars();
+        if let Some(first) = chars.next() {
+            out.extend(first.to_uppercase());
+            out.push_str(chars.as_str());
+        }
+    }
+    out
 }
 
 pub fn classify(ev: &HookEvent) -> Effect {
@@ -251,6 +270,32 @@ mod tests {
         assert_eq!(HookEvent::from_value(&json!({"session_id": "x"})), Err(EventError::MissingEventName));
         assert_eq!(HookEvent::from_value(&json!([1, 2])), Err(EventError::NotAnObject));
         assert!(matches!(HookEvent::from_slice(b"{nope"), Err(EventError::NotJson(_))));
+    }
+
+    #[test]
+    fn codex_event_names_mean_the_same_as_claude_codes() {
+        let name = |n: &str| ev(json!({"hook_event_name": n, "session_id": "s"})).name;
+        assert_eq!(name("permission-request"), "PermissionRequest");
+        assert_eq!(name("user-prompt-submit"), "UserPromptSubmit");
+        assert_eq!(name("pre-tool-use"), "PreToolUse");
+        assert_eq!(name("stop"), "Stop");
+        assert_eq!(name("session-end"), "SessionEnd");
+        // Claude Code's own names arrive untouched, including the compound ones.
+        assert_eq!(name("StopFailure"), "StopFailure");
+        assert_eq!(name("PostToolUseFailure"), "PostToolUseFailure");
+
+        // And a Codex event reaching the engine does what the Claude Code one does.
+        let c = |v| classify(&ev(v));
+        assert_eq!(
+            c(json!({"hook_event_name": "permission-request", "session_id": "s", "tool_use_id": "t1"})),
+            Effect::Signal { kind: Attention::Approval, wait: Some("t1".to_owned()) }
+        );
+        assert_eq!(
+            c(json!({"hook_event_name": "stop", "session_id": "s"})),
+            Effect::Signal { kind: Attention::Done, wait: None }
+        );
+        assert_eq!(c(json!({"hook_event_name": "user-prompt-submit", "session_id": "s"})), Effect::Prompted);
+        assert_eq!(c(json!({"hook_event_name": "session-start", "session_id": "s"})), Effect::SessionStarted);
     }
 
     #[test]

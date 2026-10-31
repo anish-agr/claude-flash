@@ -169,6 +169,14 @@ fn copy_tree_missing(from: &Path, to: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// Codex's `hooks.json`, where its own hooks live.
+pub fn codex_hooks() -> PathBuf {
+    match env::var_os("CODEX_HOME").filter(|v| !v.is_empty()) {
+        Some(dir) => PathBuf::from(dir).join("hooks.json"),
+        None => home().join(".codex").join("hooks.json"),
+    }
+}
+
 /// Claude Code's user-level `settings.json`.
 pub fn claude_settings() -> PathBuf {
     match env::var_os("CLAUDE_CONFIG_DIR").filter(|v| !v.is_empty()) {

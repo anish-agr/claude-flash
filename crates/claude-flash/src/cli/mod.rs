@@ -140,6 +140,9 @@ enum Command {
         #[command(subcommand)]
         action: hooks::HooksAction,
     },
+    /// Deliver one hook event, read from standard input, to the agent. Codex's hooks
+    /// run this; Claude Code's post to the agent themselves
+    Hook,
     /// Start, stop or run the background agent
     Agent {
         #[command(subcommand)]
@@ -266,6 +269,10 @@ pub fn main() -> ExitCode {
         Some(Command::Stats { since, json }) => report::stats(&env, &since, json),
         Some(Command::Config { action }) => config::run(&env, action),
         Some(Command::Hooks { action }) => hooks::run(&env, action),
+        Some(Command::Hook) => {
+            agent::deliver(&env);
+            Ok(())
+        }
         Some(Command::Agent { action: agent::AgentAction::Run { headless, port } }) => {
             return crate::agent::run(crate::agent::Options { headless, port, echo: true, toggle: false });
         }

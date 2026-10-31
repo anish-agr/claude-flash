@@ -322,6 +322,48 @@ fn finish(original: Option<&str>, before: Value, root: Map<String, Value>, remov
     Change { text, changed: true, removed, added }
 }
 
+/// Every Codex event Claude Flash listens to. Codex names them as Claude Code does,
+/// which is how its own bundled plugins write them, even though it spells the same
+/// events in kebab case inside a payload. It has no equivalent of Claude Code's
+/// `AskUserQuestion` tool or of `StopFailure`, so Codex drives the done and approval
+/// signals and the waits, but not question or error.
+pub const CODEX_EVENTS: &[&str] =
+    &["SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse", "Stop", "SessionEnd"];
+
+/// A `hooks.json` for Codex, which runs a command per event rather than posting to
+/// an address: every event runs `flash hook`, which starts the agent if it is not up
+/// and hands the event over on standard input.
+///
+/// Codex's parser is strict about the shape, and it rejects the file outright over
+/// one bad entry: `command` is a string, not a list of arguments, and a byte order
+/// mark at the start counts as a parse error, so this is written as plain UTF-8.
+pub fn codex_hooks(program: &str) -> Value {
+    let mut events = Map::new();
+    for event in CODEX_EVENTS {
+        let hook = json!({"type": "command", "command": program, "args": ["hook"], "timeout": 30});
+        events.insert((*event).to_owned(), json!([{ "hooks": [hook] }]));
+    }
+    json!({ "hooks": Value::Object(events) })
+}
+
+/// Whether a `hooks.json` holds nothing but Claude Flash's own hooks, so replacing it
+/// outright loses nobody else's work.
+pub fn codex_hooks_are_only_ours(original: &str) -> bool {
+    let Ok(value) = serde_json::from_str::<Value>(original.trim_start_matches('\u{feff}')) else {
+        return original.trim().is_empty();
+    };
+    let Some(events) = value.get("hooks").and_then(Value::as_object) else {
+        return value.as_object().is_some_and(Map::is_empty);
+    };
+    events.values().all(|groups| {
+        groups.as_array().is_some_and(|groups| {
+            groups.iter().all(|group| {
+                group.get("hooks").and_then(Value::as_array).is_some_and(|hooks| hooks.iter().all(is_flash_hook))
+            })
+        })
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -389,6 +431,30 @@ mod tests {
             assert_eq!(hook["headers"]["Authorization"], "Bearer 9f3a");
             assert_eq!(hook["headers"][MARKER_HEADER], HOOK_VERSION);
         }
+    }
+
+    #[test]
+    fn codex_hooks_match_the_shape_codex_accepts() {
+        let v = codex_hooks(r"C:\bin\flash.exe");
+        let events = v["hooks"].as_object().expect("an object of events");
+        assert_eq!(events.len(), CODEX_EVENTS.len());
+        // Codex names events as Claude Code does, not in the kebab case it uses in a
+        // payload, and its own bundled plugins group hooks the same way.
+        // Stop is the finished-turn signal, and PermissionRequest the approval.
+        assert!(events.contains_key("Stop") && events.contains_key("PermissionRequest"));
+        let hook = &events["SessionStart"][0]["hooks"][0];
+        assert_eq!(hook["type"], "command");
+        // A list here is rejected outright: "invalid type: sequence, expected a string".
+        assert!(hook["command"].is_string());
+        assert_eq!(hook["args"], json!(["hook"]));
+
+        // Ours alone can be replaced; anything else is the user's to merge.
+        let ours = serde_json::to_string(&v).unwrap();
+        assert!(codex_hooks_are_only_ours(&ours));
+        assert!(codex_hooks_are_only_ours(""));
+        assert!(!codex_hooks_are_only_ours(
+            r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"notify-send done"}]}]}}"#
+        ));
     }
 
     #[test]

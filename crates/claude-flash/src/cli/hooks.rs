@@ -39,6 +39,15 @@ pub enum HooksAction {
         /// This machine, as the other one reaches it: an address or a host name
         host: String,
     },
+    /// Add Claude Flash's hooks to Codex, so Codex sessions flash as well
+    Codex {
+        /// A hooks file other than ~/.codex/hooks.json
+        #[arg(long)]
+        file: Option<PathBuf>,
+        /// Print the result instead of writing it
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 pub fn run(env: &Env, action: HooksAction) -> Outcome {
@@ -61,7 +70,46 @@ pub fn run(env: &Env, action: HooksAction) -> Outcome {
             println!("{}  {}", paths::display(&path), inspect(&path, env.port()));
         }
         HooksAction::Remote { host } => remote(env, &host)?,
+        HooksAction::Codex { file, dry_run } => codex(file, dry_run)?,
     }
+    Ok(())
+}
+
+/// Writes a `hooks.json` that makes Codex sessions flash. Codex runs a command for
+/// each event instead of posting to an address, so each of its hooks runs
+/// `flash hook`, which starts the agent if it is not up and hands the event over.
+///
+/// A file that holds anything but Claude Flash's own hooks is printed rather than
+/// written, because merging somebody else's hooks is their decision, not ours.
+fn codex(file: Option<PathBuf>, dry_run: bool) -> Outcome {
+    let path = file.unwrap_or_else(paths::codex_hooks);
+    let program = std::env::current_exe().map_err(|e| format!("cannot locate this executable: {e}"))?;
+    let desired = settings::codex_hooks(&program.to_string_lossy());
+    let mut text = serde_json::to_string_pretty(&desired).expect("a JSON value always serialises");
+    text.push('\n');
+
+    let existing = match fs::read_to_string(&path) {
+        Ok(text) => Some(text),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+        Err(e) => return Err(format!("could not read {}: {e}", paths::display(&path))),
+    };
+    let ours = existing.as_deref().is_none_or(settings::codex_hooks_are_only_ours);
+    if dry_run || !ours {
+        if !ours {
+            println!("{} holds hooks that are not ours, so nothing was written.", paths::display(&path));
+            println!("{}", style::dim("Merge these entries into its \"hooks\" object by hand:"));
+        }
+        println!("{text}");
+        return Ok(());
+    }
+    if existing.as_deref() == Some(text.as_str()) {
+        println!("{}  already current", paths::display(&path));
+        return Ok(());
+    }
+    store::write_atomic(&path, text.as_bytes())
+        .map_err(|e| format!("could not write {}: {e}", paths::display(&path)))?;
+    println!("{} {} events in {}", style::green("✓"), settings::CODEX_EVENTS.len(), paths::display(&path));
+    println!("{}", style::dim("Codex sessions already open use these once restarted."));
     Ok(())
 }
 
