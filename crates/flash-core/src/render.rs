@@ -24,6 +24,11 @@ pub struct Timing {
     pub fade_out_ms: u32,
     pub dismiss_fade_ms: u32,
     pub min_visible_ms: u32,
+    /// Stay at full strength once faded in, instead of fading out after `hold_ms`,
+    /// until a key or the mouse dismisses it. Standby flashes are shown this way, so
+    /// something that arrives while nobody is at the desk is still on screen when
+    /// somebody comes back.
+    pub hold_until_input: bool,
 }
 
 pub fn ease_out_cubic(x: f32) -> f32 {
@@ -63,15 +68,24 @@ impl Envelope {
         self.timing
     }
 
-    pub fn total_ms(&self) -> u64 {
+    /// How long the flash runs in all. A standby flash has no answer until it is
+    /// dismissed, and reports `None`.
+    pub fn total_ms(&self) -> Option<u64> {
         match self.dismissed {
-            Some((at, _)) => at + u64::from(self.timing.dismiss_fade_ms.max(1)),
-            None => {
+            Some((at, _)) => Some(at + u64::from(self.timing.dismiss_fade_ms.max(1))),
+            None if self.timing.hold_until_input => None,
+            None => Some(
                 u64::from(self.timing.fade_in_ms)
                     + u64::from(self.timing.hold_ms)
-                    + u64::from(self.timing.fade_out_ms.max(1))
-            }
+                    + u64::from(self.timing.fade_out_ms.max(1)),
+            ),
         }
+    }
+
+    /// Whether the flash is sitting at full strength waiting to be dismissed, in
+    /// which case the picture does not change and it need not be redrawn often.
+    pub fn holding(&self, t: u64) -> bool {
+        self.timing.hold_until_input && self.dismissed.is_none() && t >= u64::from(self.timing.fade_in_ms)
     }
 
     /// Opacity at `t` milliseconds after the flash started, or `None` once finished.
@@ -87,7 +101,7 @@ impl Envelope {
         );
         if t < fade_in {
             Some(self.peak * ease_out_cubic(t as f32 / fade_in as f32))
-        } else if t < fade_in + hold {
+        } else if self.timing.hold_until_input || t < fade_in + hold {
             Some(self.peak)
         } else {
             let d = (t - fade_in - hold) as f32 / fade_out as f32;
@@ -231,8 +245,14 @@ mod tests {
         assert!(at(10, 9)[0] > at(22, 23)[0], "the highlight sits up and to the left");
     }
 
-    const T: Timing =
-        Timing { fade_in_ms: 70, hold_ms: 420, fade_out_ms: 560, dismiss_fade_ms: 110, min_visible_ms: 120 };
+    const T: Timing = Timing {
+        fade_in_ms: 70,
+        hold_ms: 420,
+        fade_out_ms: 560,
+        dismiss_fade_ms: 110,
+        min_visible_ms: 120,
+        hold_until_input: false,
+    };
 
     #[test]
     fn envelope_rises_holds_and_falls() {
@@ -243,7 +263,7 @@ mod tests {
         assert_eq!(e.alpha(489), Some(0.28));
         assert!(e.alpha(800).unwrap() < 0.28);
         assert_eq!(e.alpha(1_050), None);
-        assert_eq!(e.total_ms(), 1_050);
+        assert_eq!(e.total_ms(), Some(1_050));
     }
 
     #[test]
@@ -263,7 +283,26 @@ mod tests {
         assert!((e.alpha(200).unwrap() - 0.3).abs() < 1e-6);
         assert!(e.alpha(260).unwrap() < 0.3);
         assert_eq!(e.alpha(310), None);
-        assert_eq!(e.total_ms(), 310);
+        assert_eq!(e.total_ms(), Some(310));
+    }
+
+    #[test]
+    fn a_standby_flash_stays_up_until_it_is_dismissed() {
+        let held = Timing { hold_until_input: true, ..T };
+        let mut e = Envelope::new(held, 0.28, false);
+        assert_eq!(e.alpha(0), Some(0.0), "it still fades in");
+        assert_eq!(e.alpha(70), Some(0.28));
+        // Long past the point an ordinary flash would have gone.
+        assert_eq!(e.alpha(60_000), Some(0.28));
+        assert_eq!(e.total_ms(), None, "no end until somebody comes back");
+        assert!(e.holding(70) && !e.holding(10), "only once it has risen");
+
+        assert!(!e.dismiss(50), "a keystroke already in flight cannot hide it");
+        assert!(e.dismiss(60_000));
+        assert!(!e.holding(60_000), "dismissed, so it is moving again");
+        assert!(e.alpha(60_050).unwrap() < 0.28);
+        assert_eq!(e.alpha(60_110), None);
+        assert_eq!(e.total_ms(), Some(60_110));
     }
 
     #[test]

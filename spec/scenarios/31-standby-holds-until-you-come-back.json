@@ -1,0 +1,43 @@
+{
+  "title": "On standby, a signal that arrives while you are away stays on screen instead of playing to an empty chair",
+  "config": "[presence]\nstandby = true\nnotify_when_away = true\ndigest_on_return = false\n",
+  "steps": [
+    { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    {
+      "at": "1m",
+      "note": "At the desk, a finished turn flashes and fades as usual",
+      "hook": { "hook_event_name": "Stop", "session_id": "s1", "cwd": "/work/app" },
+      "expect": ["flash done"]
+    },
+    { "at": "2m", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
+    {
+      "at": "10m",
+      "idle": "8m",
+      "note": "Away: the flash is held up, and the notification still goes out",
+      "hook": { "hook_event_name": "PermissionRequest", "session_id": "s1", "cwd": "/work/app", "tool_name": "Bash", "tool_use_id": "t1" },
+      "expect": ["standby approval", "notify approval"],
+      "waiting": 1
+    },
+    {
+      "at": "20m",
+      "idle": "18m",
+      "note": "Still away ten minutes later, and nothing new is shown; the held flash is already up",
+      "tick": true,
+      "expect": []
+    },
+    {
+      "at": "21m",
+      "idle": "0s",
+      "note": "Back at the desk. The input that dismissed the held flash also ends being away, and the digest is off here",
+      "tick": true,
+      "expect": []
+    },
+    {
+      "at": "22m",
+      "note": "Answered, so the wait closes",
+      "hook": { "hook_event_name": "PostToolUse", "session_id": "s1", "cwd": "/work/app", "tool_name": "Bash", "tool_use_id": "t1" },
+      "expect": [],
+      "waiting": 0
+    }
+  ]
+}

@@ -35,9 +35,18 @@ struct App {
     menu: menu::StatusMenu,
     overlay: Option<overlay::Overlay>,
     timer: Option<Retained<NSTimer>>,
+    /// Interval the running timer was created with, so it is only replaced when a
+    /// different one is wanted.
+    frame_secs: f64,
     /// The latest status and when it arrived.
     status: Option<(Box<Status>, Instant)>,
 }
+
+/// One frame at 60 Hz while a flash is moving.
+const FRAME_SECS: f64 = 1.0 / 60.0;
+/// A standby flash sits at one strength for as long as nobody is at the desk, so it
+/// only needs redrawing often enough to notice the input that clears it.
+const STANDBY_FRAME_SECS: f64 = 0.12;
 
 thread_local! {
     static APP: RefCell<Option<App>> = const { RefCell::new(None) };
@@ -132,7 +141,17 @@ pub fn run(native: Native) -> ExitCode {
     let target = Target::new(mtm);
     let menu = menu::StatusMenu::new(mtm, &target);
     APP.with(|cell| {
-        *cell.borrow_mut() = Some(App { mtm, target, requests, paths, menu, overlay: None, timer: None, status: None });
+        *cell.borrow_mut() = Some(App {
+            mtm,
+            target,
+            requests,
+            paths,
+            menu,
+            overlay: None,
+            timer: None,
+            frame_secs: FRAME_SECS,
+            status: None,
+        });
     });
 
     let spawned = thread::Builder::new().name("runtime".into()).spawn(move || {
@@ -159,26 +178,42 @@ impl App {
         if self.overlay.is_none() {
             log!("could not show a {} flash: no overlay window could be created", spec.kind);
             self.stop_timer();
-        } else if self.timer.is_none() {
-            // SAFETY: Target implements `tick:`, and the timer keeps it alive.
-            let timer = unsafe {
-                NSTimer::scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(
-                    1.0 / 60.0,
-                    &self.target,
-                    sel!(tick:),
-                    None,
-                    true,
-                )
-            };
-            self.timer = Some(timer);
+        } else {
+            self.set_timer(FRAME_SECS);
         }
     }
 
     fn animate(&mut self) {
-        if !self.overlay.as_mut().is_some_and(overlay::Overlay::frame) {
-            self.overlay = None;
-            self.stop_timer();
+        let holding = match self.overlay.as_mut() {
+            Some(overlay) => overlay.frame().then(|| overlay.holding()),
+            None => None,
+        };
+        match holding {
+            Some(holding) => self.set_timer(if holding { STANDBY_FRAME_SECS } else { FRAME_SECS }),
+            None => {
+                self.overlay = None;
+                self.stop_timer();
+            }
         }
+    }
+
+    fn set_timer(&mut self, secs: f64) {
+        if self.timer.is_some() && self.frame_secs == secs {
+            return;
+        }
+        self.stop_timer();
+        self.frame_secs = secs;
+        // SAFETY: Target implements `tick:`, and the timer keeps it alive.
+        let timer = unsafe {
+            NSTimer::scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(
+                secs,
+                &self.target,
+                sel!(tick:),
+                None,
+                true,
+            )
+        };
+        self.timer = Some(timer);
     }
 
     fn stop_timer(&mut self) {

@@ -109,6 +109,7 @@ pub enum Action {
 /// `notify done`, `suppressed paused` — or `None` for bookkeeping.
 pub fn describe(action: &Action) -> Option<String> {
     match action {
+        Action::Flash(spec) if spec.timing.hold_until_input => Some(format!("standby {}", spec.kind)),
         Action::Flash(spec) => Some(format!("flash {}", spec.kind)),
         Action::Notify(n) => Some(format!("notify {}", n.kind)),
         Action::Push(n) => Some(format!("push {}", n.kind)),
@@ -519,6 +520,15 @@ impl Engine {
         if self.away {
             self.digest.add(kind);
             outcome.delivered.push(Channel::Digest);
+            // Standby holds the flash on screen rather than playing it to an empty
+            // chair. It clears on the first key or mouse move, so coming back to the
+            // desk both reveals the signal and dismisses it.
+            if self.config.presence.standby && !self.focused_skip(ctx) {
+                let spec = FlashSpec { timing: self.config.flash.standby_timing(), ..self.flash_spec(kind, style) };
+                if self.request_flash(spec, ctx, out) != Requested::Covered {
+                    outcome.delivered.push(Channel::Flash);
+                }
+            }
             if self.config.presence.notify_when_away {
                 outcome.delivered.push(Channel::Notify);
                 out.push(Action::Notify(notice.clone()));

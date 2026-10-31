@@ -27,7 +27,9 @@ tray icon and the menu bar item can say what Claude is blocked on and for how
 long. A session raises signals only once a prompt has been submitted in it, which
 keeps subagents and sessions you are not driving quiet. After five minutes without
 keyboard or mouse input the flashes become desktop notifications, and the first
-flash after you come back reports what you missed.
+flash after you come back reports what you missed. Turn on standby and a signal
+raised while you are away stays on the screen instead, until you touch the keyboard
+or mouse.
 
 [Install](#install) · [Getting started](docs/getting-started.md) ·
 [Commands](#usage) · [Configuration](docs/configuration.md) ·
@@ -390,6 +392,10 @@ sound = true
 skip_when_focused = ["WindowsTerminal"]
 # Flash again while Claude stays blocked on you.
 remind_after = "10m"
+
+[presence]
+# Hold a flash raised while you are away on screen until you come back to the desk.
+standby = true
 
 [quiet_hours]
 start = "22:00"

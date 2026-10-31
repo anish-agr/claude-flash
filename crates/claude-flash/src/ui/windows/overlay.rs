@@ -33,6 +33,8 @@ pub struct Overlay {
     envelope: Envelope,
     started: Instant,
     input: InputWatch,
+    /// Strength the windows are currently showing.
+    applied: f32,
 }
 
 impl Overlay {
@@ -51,7 +53,8 @@ impl Overlay {
             windows,
             envelope: Envelope::new(spec.timing, spec.opacity, reduce_motion),
             started: Instant::now(),
-            input: InputWatch::start(),
+            input: InputWatch::start(spec.timing.hold_until_input),
+            applied: 0.0,
         };
         overlay.apply(0.0);
         for window in &overlay.windows {
@@ -69,11 +72,21 @@ impl Overlay {
         }
         match self.envelope.alpha(t) {
             Some(alpha) => {
-                self.apply(alpha);
+                // A standby flash holds one strength for as long as it is up, and
+                // redrawing every monitor to the same picture costs for nothing.
+                if (alpha - self.applied).abs() > 1.0 / 512.0 {
+                    self.applied = alpha;
+                    self.apply(alpha);
+                }
                 true
             }
             None => false,
         }
+    }
+
+    /// Whether this is a standby flash sitting still, waiting to be dismissed.
+    pub fn holding(&self) -> bool {
+        self.envelope.holding(self.started.elapsed().as_millis() as u64)
     }
 
     fn apply(&self, alpha: f32) {
@@ -270,11 +283,16 @@ fn monitors() -> Vec<RECT> {
 struct InputWatch {
     last_input: u32,
     cursor: POINT,
+    /// Whether moving the mouse counts. A standby flash is waiting for somebody to
+    /// come back to the desk, and a mouse move is how that usually shows, so any
+    /// input clears it. A flash that plays and fades ignores a glide instead, so a
+    /// drifting mouse cannot cut it short before it has been seen.
+    any_input: bool,
 }
 
 impl InputWatch {
-    fn start() -> InputWatch {
-        InputWatch { last_input: last_input_tick(), cursor: cursor() }
+    fn start(any_input: bool) -> InputWatch {
+        InputWatch { last_input: last_input_tick(), cursor: cursor(), any_input }
     }
 
     fn user_acted(&mut self) -> bool {
@@ -286,6 +304,9 @@ impl InputWatch {
         let now = cursor();
         let moved = now.x != self.cursor.x || now.y != self.cursor.y;
         self.cursor = now;
+        if self.any_input {
+            return true;
+        }
         // SAFETY: GetAsyncKeyState has no preconditions.
         let clicking =
             [VK_LBUTTON, VK_RBUTTON, VK_MBUTTON].iter().any(|&vk| unsafe { GetAsyncKeyState(vk.into()) } < 0);

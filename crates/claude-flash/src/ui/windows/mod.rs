@@ -40,6 +40,9 @@ const NIN_KEYSELECT: u32 = 0x401;
 const ANIMATION_TIMER: usize = 1;
 /// About one frame at 60 Hz. Windows rounds timers to its own tick in any case.
 const FRAME_MS: u32 = 15;
+/// A standby flash sits at one strength for as long as nobody is at the desk, so it
+/// only needs redrawing often enough to notice the key or the mouse that clears it.
+const STANDBY_FRAME_MS: u32 = 120;
 
 /// Broadcast when Explorer restarts, after which the tray icon must be added again.
 static TASKBAR_CREATED: AtomicU32 = AtomicU32::new(0);
@@ -53,6 +56,8 @@ struct App {
     paths: Paths,
     tray: tray::Tray,
     overlay: Option<overlay::Overlay>,
+    /// Interval the animation timer is running at, or zero when it is stopped.
+    frame_ms: u32,
     /// The latest status and when it arrived.
     status: Option<(Box<Status>, Instant)>,
 }
@@ -124,8 +129,17 @@ pub fn run(native: Native) -> ExitCode {
 
     let tray = tray::Tray::add(hwnd, WM_TRAY);
     APP.with(|cell| {
-        *cell.borrow_mut() =
-            Some(App { hwnd, instance, events: receiver, requests, paths, tray, overlay: None, status: None });
+        *cell.borrow_mut() = Some(App {
+            hwnd,
+            instance,
+            events: receiver,
+            requests,
+            paths,
+            tray,
+            overlay: None,
+            frame_ms: 0,
+            status: None,
+        });
     });
 
     // SAFETY: the standard message loop, on the thread that created the windows.
@@ -230,19 +244,35 @@ impl App {
         self.overlay = None;
         self.overlay = overlay::Overlay::show(spec, self.instance);
         if self.overlay.is_some() {
-            // SAFETY: a timer on our own window, replaced if one is already running.
-            unsafe { SetTimer(self.hwnd, ANIMATION_TIMER, FRAME_MS, None) };
+            self.set_frame_timer(FRAME_MS);
         } else {
             log!("could not show a {} flash: no overlay window could be created", spec.kind);
         }
     }
 
     fn animate(&mut self) {
-        if !self.overlay.as_mut().is_some_and(overlay::Overlay::frame) {
-            self.overlay = None;
-            // SAFETY: stops the timer started in `flash`.
-            unsafe { KillTimer(self.hwnd, ANIMATION_TIMER) };
+        let holding = match self.overlay.as_mut() {
+            Some(overlay) => overlay.frame().then(|| overlay.holding()),
+            None => None,
+        };
+        match holding {
+            Some(holding) => self.set_frame_timer(if holding { STANDBY_FRAME_MS } else { FRAME_MS }),
+            None => {
+                self.overlay = None;
+                self.frame_ms = 0;
+                // SAFETY: stops the timer started in `flash`.
+                unsafe { KillTimer(self.hwnd, ANIMATION_TIMER) };
+            }
         }
+    }
+
+    fn set_frame_timer(&mut self, ms: u32) {
+        if self.frame_ms == ms {
+            return;
+        }
+        self.frame_ms = ms;
+        // SAFETY: a timer on our own window, replaced if one is already running.
+        unsafe { SetTimer(self.hwnd, ANIMATION_TIMER, ms, None) };
     }
 
     fn send(&self, control: Control) {

@@ -73,7 +73,13 @@ impl Flash {
             fade_out_ms: self.fade_out_ms,
             dismiss_fade_ms: self.dismiss_fade_ms,
             min_visible_ms: self.min_visible_ms,
+            hold_until_input: false,
         }
+    }
+
+    /// The same timing, but holding on screen until a key or the mouse clears it.
+    pub fn standby_timing(&self) -> Timing {
+        Timing { hold_until_input: true, ..self.timing() }
     }
 }
 
@@ -170,11 +176,14 @@ pub struct Presence {
     pub away_after: Span,
     pub notify_when_away: bool,
     pub digest_on_return: bool,
+    /// While away, hold the flash on screen until a key or the mouse clears it,
+    /// rather than letting it play and fade with nobody watching.
+    pub standby: bool,
 }
 
 impl Default for Presence {
     fn default() -> Self {
-        Presence { away_after: Span(5 * 60_000), notify_when_away: true, digest_on_return: true }
+        Presence { away_after: Span(5 * 60_000), notify_when_away: true, digest_on_return: true, standby: false }
     }
 }
 
@@ -519,6 +528,9 @@ away_after = "5m"
 notify_when_away = true
 # On your return, flash once for the most important thing that happened.
 digest_on_return = true
+# Standby: while away, leave the flash on screen until you touch the keyboard or
+# mouse, so you can see from across the room that Claude is waiting.
+standby = false
 
 [push]
 # Send signals to a phone while you are away. An empty url disables this.

@@ -30,6 +30,8 @@ pub struct Overlay {
     windows: Vec<Retained<NSWindow>>,
     envelope: Envelope,
     started: Instant,
+    /// Strength the windows are currently showing.
+    applied: f32,
 }
 
 impl Overlay {
@@ -51,6 +53,7 @@ impl Overlay {
             windows,
             envelope: Envelope::new(spec.timing, spec.opacity, reduce_motion),
             started: Instant::now(),
+            applied: 0.0,
         })
     }
 
@@ -58,18 +61,28 @@ impl Overlay {
     pub fn frame(&mut self) -> bool {
         let elapsed = self.started.elapsed();
         let t = elapsed.as_millis() as u64;
-        if user_acted_within(elapsed.as_secs_f64()) {
+        if user_acted_within(elapsed.as_secs_f64(), self.envelope.timing().hold_until_input) {
             self.envelope.dismiss(t);
         }
         match self.envelope.alpha(t) {
             Some(alpha) => {
-                for window in &self.windows {
-                    window.setAlphaValue(f64::from(alpha));
+                // A standby flash holds one strength for as long as it is up, and
+                // redrawing every display to the same picture costs for nothing.
+                if (alpha - self.applied).abs() > 1.0 / 512.0 {
+                    self.applied = alpha;
+                    for window in &self.windows {
+                        window.setAlphaValue(f64::from(alpha));
+                    }
                 }
                 true
             }
             None => false,
         }
+    }
+
+    /// Whether this is a standby flash sitting still, waiting to be dismissed.
+    pub fn holding(&self) -> bool {
+        self.envelope.holding(self.started.elapsed().as_millis() as u64)
     }
 }
 
@@ -128,15 +141,21 @@ fn window_for(mtm: MainThreadMarker, screen: &NSScreen, spec: &FlashSpec) -> Opt
     Some(window)
 }
 
-/// Whether a key was pressed or a mouse button clicked in the last `seconds`. This
-/// reads when each kind of input last happened, so it needs no event tap and no
-/// Input Monitoring permission, and a mouse glide does not count.
-fn user_acted_within(seconds: f64) -> bool {
-    [CGEventType::KeyDown, CGEventType::LeftMouseDown, CGEventType::RightMouseDown, CGEventType::OtherMouseDown]
-        .into_iter()
-        .any(|kind| {
-            CGEventSource::seconds_since_last_event_type(CGEventSourceStateID::CombinedSessionState, kind) < seconds
-        })
+/// Whether the user did something in the last `seconds`. This reads when each kind of
+/// input last happened, so it needs no event tap and no Input Monitoring permission.
+///
+/// A flash that plays and fades counts only keys and clicks, so a drifting mouse
+/// cannot cut it short before it has been seen. A standby flash is waiting for
+/// somebody to come back to the desk, where a mouse move is the usual sign, so
+/// `any_input` counts movement and scrolling as well.
+fn user_acted_within(seconds: f64, any_input: bool) -> bool {
+    const ACTED: [CGEventType; 4] =
+        [CGEventType::KeyDown, CGEventType::LeftMouseDown, CGEventType::RightMouseDown, CGEventType::OtherMouseDown];
+    const RETURNED: [CGEventType; 3] =
+        [CGEventType::MouseMoved, CGEventType::ScrollWheel, CGEventType::LeftMouseDragged];
+    ACTED.iter().chain(if any_input { RETURNED.iter() } else { [].iter() }).any(|&kind| {
+        CGEventSource::seconds_since_last_event_type(CGEventSourceStateID::CombinedSessionState, kind) < seconds
+    })
 }
 
 /// A CGImage over a copy of RGBA pixels.

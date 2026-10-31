@@ -107,6 +107,36 @@ reason: lighter purples drift towards the blue of a question at low opacity.
 | `away_after` | `"5m"` | With no keyboard or mouse input for this long, you count as away; `"0"` turns presence off |
 | `notify_when_away` | `true` | While you are away, show a desktop notification instead of a flash |
 | `digest_on_return` | `true` | When you return, flash once in the colour of the most urgent signal among the waits still open and the signals that arrived while you were away |
+| `standby` | `false` | While you are away, leave the flash on screen until you touch the keyboard or mouse, instead of letting it play and fade with nobody watching |
+
+### Standby
+
+An ordinary flash lasts about a second, which is no use if it happens while you are
+not at the desk. With `standby = true`, a signal raised while you count as away fades
+in and then stays, so the screen is still tinted when you come back. The first key,
+click, scroll or mouse move clears it, and because that same input ends being away,
+coming back both shows you the signal and dismisses it.
+
+```toml
+[presence]
+away_after = "5m"
+standby = true
+```
+
+It is the signal's own colour and opacity, so a held flash is a tint you can read
+and work through rather than a cover over the screen, and the overlay ignores the
+mouse as always. `notify_when_away` and `push` are unchanged by it: turn them on as
+well if you want the notification too. `flash log` writes a held flash as
+`standby approval` rather than `flash approval`.
+
+To try it without waiting to go idle, drop the threshold for a minute:
+
+```bash
+flash config set presence.away_after 10s
+```
+
+Signals arriving after ten seconds of no input will then hold. Put it back with
+`flash config set presence.away_after 5m`.
 
 ## `[push]`
 
