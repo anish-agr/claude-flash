@@ -6,6 +6,7 @@ use std::path::{Component, Path, PathBuf};
 
 use clap::Args;
 use flash_core::config;
+use flash_core::settings;
 
 use super::{Env, Outcome, agent, hooks, style};
 use crate::store::{self, State};
@@ -65,7 +66,7 @@ pub fn install(env: &Env, args: &InstallArgs) -> Outcome {
         false
     } else {
         let settings = paths::claude_settings();
-        let change = hooks::install(&settings, &flash, env.port(), false)?;
+        let change = hooks::install(&settings, &flash, env.port(), settings::Host::default(), false)?;
         let detail = if change.changed {
             format!("{} events in {}", change.added, paths::display(&settings))
         } else {

@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 use flash_core::config::Config;
-use flash_core::settings::{self, Install};
+use flash_core::settings::{self, Host, Install};
 use flash_core::{duration, time};
 
 use super::{Env, Outcome, hooks, style};
@@ -164,7 +164,8 @@ fn check_hooks(env: &Env, report: &mut Report) {
         return;
     };
     let program = hooks::installed_program(&text);
-    let spec = Install { port: env.port(), program: program.clone().unwrap_or_default(), remote: None };
+    let spec =
+        Install { port: env.port(), program: program.clone().unwrap_or_default(), remote: None, host: Host::default() };
     match settings::inspect(&text, &spec) {
         Err(e) => report.line(Level::Fail, "hooks", e.to_string()),
         Ok(_) if settings::hooks_disabled(&text) => {

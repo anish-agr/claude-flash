@@ -36,6 +36,39 @@ pub const SUBSCRIPTIONS: &[(&str, Option<&str>)] = &[
     ("SessionEnd", None),
 ];
 
+/// Every Gemini CLI event Claude Flash listens to, under Gemini's own names. Gemini
+/// publishes the mapping itself in `gemini hooks migrate`: `BeforeAgent` is Claude
+/// Code's `UserPromptSubmit`, `AfterAgent` its `Stop`, and so on. Only the tool
+/// events take a matcher, as Gemini's own examples show.
+pub const GEMINI_SUBSCRIPTIONS: &[(&str, Option<&str>)] = &[
+    ("SessionStart", None),
+    ("BeforeAgent", None),
+    ("BeforeTool", Some("*")),
+    ("AfterTool", Some("*")),
+    ("Notification", None),
+    ("AfterAgent", None),
+    ("SessionEnd", None),
+];
+
+/// Which agent's settings file is being written. They share the shape of the `hooks`
+/// object, so the merging is the same, but they name events differently and only
+/// Claude Code accepts an HTTP hook.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Host {
+    #[default]
+    ClaudeCode,
+    Gemini,
+}
+
+impl Host {
+    fn subscriptions(self) -> &'static [(&'static str, Option<&'static str>)] {
+        match self {
+            Host::ClaudeCode => SUBSCRIPTIONS,
+            Host::Gemini => GEMINI_SUBSCRIPTIONS,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Install {
     pub port: u16,
@@ -45,6 +78,8 @@ pub struct Install {
     /// Set when the hooks point at an agent on another machine, which has nothing
     /// local to start and wants its token on every event.
     pub remote: Option<RemoteAgent>,
+    /// Whose settings file this is. Claude Code by default.
+    pub host: Host,
 }
 
 /// An agent reachable over the network, and the token that admits a request to it.
@@ -122,7 +157,7 @@ pub fn install(original: Option<&str>, spec: &Install) -> Result<Change, Setting
     let hooks = hooks_mut(&mut root)?;
     let removed = strip(hooks)?;
     let mut added = 0;
-    for (event, matcher) in SUBSCRIPTIONS {
+    for (event, matcher) in spec.host.subscriptions() {
         let group = desired_group(event, *matcher, spec);
         added += group["hooks"].as_array().map_or(0, Vec::len);
         let slot = hooks.entry((*event).to_owned()).or_insert_with(|| Value::Array(Vec::new()));
@@ -160,7 +195,7 @@ pub fn inspect(original: &str, spec: &Install) -> Result<Inspection, SettingsErr
         .filter(|h| is_flash_hook(h))
         .count();
     let mut report = Inspection::default();
-    for (event, matcher) in SUBSCRIPTIONS {
+    for (event, matcher) in spec.host.subscriptions() {
         let want = desired_group(event, *matcher, spec);
         let want_hooks = want["hooks"].as_array().cloned().unwrap_or_default();
         let found = hooks.get(*event).and_then(Value::as_array).is_some_and(|groups| {
@@ -233,7 +268,12 @@ fn desired_group(event: &str, matcher: Option<&str>, spec: &Install) -> Value {
     // event itself once the agent is listening.
     // A remote agent has nothing here to start, so it takes SessionStart over HTTP
     // like every other event.
-    let hook = if event == "SessionStart" && spec.remote.is_none() {
+    // Gemini runs a command per event and drops anything else, so every one of its
+    // hooks runs `flash hook`, which starts the agent if it is down and hands the
+    // event over. Its timeout is in milliseconds, unlike Claude Code's seconds.
+    let hook = if spec.host == Host::Gemini {
+        json!({"type": "command", "command": spec.program, "args": ["hook"], "name": "claude-flash", "timeout": 10_000})
+    } else if event == "SessionStart" && spec.remote.is_none() {
         json!({"type": "command", "command": spec.program, "args": ["agent", "ensure"], "timeout": 30})
     } else {
         let mut headers = Map::new();
@@ -369,7 +409,12 @@ mod tests {
     use super::*;
 
     fn spec() -> Install {
-        Install { port: 47_823, program: r"C:\Program Files\Claude Flash\flash.exe".into(), remote: None }
+        Install {
+            port: 47_823,
+            program: r"C:\Program Files\Claude Flash\flash.exe".into(),
+            remote: None,
+            host: Host::default(),
+        }
     }
 
     /// Shaped like a real file: another tool's hooks around a v1 Claude Flash hook.
@@ -431,6 +476,53 @@ mod tests {
             assert_eq!(hook["headers"]["Authorization"], "Bearer 9f3a");
             assert_eq!(hook["headers"][MARKER_HEADER], HOOK_VERSION);
         }
+    }
+
+    #[test]
+    fn gemini_hooks_use_its_own_event_names_and_keep_other_tools() {
+        // Shaped like a real Gemini settings.json: another tool's guard on BeforeTool.
+        let existing = r#"{
+  "hooks": {
+    "BeforeTool": [
+      {
+        "hooks": [{ "command": "C:\\tools\\other-guard.exe", "name": "other-guard", "timeout": 10000, "type": "command" }],
+        "matcher": "*"
+      }
+    ]
+  }
+}"#;
+        let spec = Install { host: Host::Gemini, ..spec() };
+        let change = install(Some(existing), &spec).unwrap();
+        let v = parse(&change.text);
+        let events: Vec<&String> = v["hooks"].as_object().unwrap().keys().collect();
+        for want in ["SessionStart", "BeforeAgent", "BeforeTool", "AfterTool", "AfterAgent", "SessionEnd"] {
+            assert!(events.iter().any(|e| *e == want), "{want} missing from {events:?}");
+        }
+        // Claude Code's names must not leak into a Gemini file.
+        assert!(!events.iter().any(|e| e.as_str() == "Stop" || e.as_str() == "UserPromptSubmit"));
+
+        // The other tool's guard is still there, alongside ours.
+        let before_tool = v["hooks"]["BeforeTool"].as_array().unwrap();
+        let names: Vec<&str> = before_tool
+            .iter()
+            .flat_map(|g| g["hooks"].as_array().unwrap())
+            .map(|h| h["name"].as_str().unwrap_or("?"))
+            .collect();
+        assert!(names.contains(&"other-guard"), "another tool's hook was lost: {names:?}");
+        assert!(names.contains(&"claude-flash"));
+
+        // Every hook of ours runs `flash hook`, and Gemini counts its timeout in ms.
+        let ours = &v["hooks"]["AfterAgent"][0]["hooks"][0];
+        assert_eq!(ours["type"], "command");
+        assert_eq!(ours["args"], json!(["hook"]));
+        assert_eq!(ours["timeout"], 10_000);
+        assert!(ours["url"].is_null(), "Gemini drops HTTP hooks, so it must not get one");
+
+        // And taking them out again leaves the other tool untouched.
+        let removed = uninstall(&change.text).unwrap();
+        let after = parse(&removed.text);
+        assert_eq!(removed.removed, GEMINI_SUBSCRIPTIONS.len());
+        assert_eq!(after["hooks"]["BeforeTool"][0]["hooks"][0]["name"], "other-guard");
     }
 
     #[test]

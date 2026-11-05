@@ -169,6 +169,14 @@ fn copy_tree_missing(from: &Path, to: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// Gemini CLI's user-level `settings.json`, which holds its hooks.
+pub fn gemini_settings() -> PathBuf {
+    match env::var_os("GEMINI_DIR").filter(|v| !v.is_empty()) {
+        Some(dir) => PathBuf::from(dir).join("settings.json"),
+        None => home().join(".gemini").join("settings.json"),
+    }
+}
+
 /// Codex's `hooks.json`, where its own hooks live.
 pub fn codex_hooks() -> PathBuf {
     match env::var_os("CODEX_HOME").filter(|v| !v.is_empty()) {

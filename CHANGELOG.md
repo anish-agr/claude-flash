@@ -15,6 +15,11 @@ Notable changes to Claude Flash. The format follows
   short. The input that clears it is the same input that ends
   being away, so coming back shows you the signal and dismisses it. A held flash
   appears in `flash log` as `standby approval` rather than `flash approval`.
+- `flash hooks gemini` points Gemini CLI's hooks at the agent. Gemini renames
+  several events, and the engine follows Gemini's own mapping, so `AfterAgent` is a
+  finished turn and `BeforeAgent` a submitted prompt. Its question tool, `ask_user`,
+  raises the question signal. Hooks belonging to other tools in that settings file
+  are left in place.
 - `flash hooks codex` writes a `~/.codex/hooks.json` that points Codex's hooks at the
   agent, and `flash hook` delivers one event from standard input, which is how a tool
   that runs a command per event reaches the agent. Codex names its events as Claude

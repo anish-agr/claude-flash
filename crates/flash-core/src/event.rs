@@ -155,20 +155,43 @@ pub enum Effect {
 /// One spelling for an event, however the agent that sent it writes the name. Claude
 /// Code sends `PermissionRequest`; Codex sends `permission-request` for the same
 /// thing. Hyphens go and every word starts with a capital, which leaves Claude
-/// Code's names exactly as they arrive.
+/// Code's names exactly as they arrive. Gemini CLI renames several events outright,
+/// so those are translated after.
 fn canonical_event(name: &str) -> String {
-    if !name.contains('-') && name.starts_with(|c: char| c.is_ascii_uppercase()) {
-        return name.to_owned();
-    }
-    let mut out = String::with_capacity(name.len());
-    for word in name.split('-').filter(|w| !w.is_empty()) {
-        let mut chars = word.chars();
-        if let Some(first) = chars.next() {
-            out.extend(first.to_uppercase());
-            out.push_str(chars.as_str());
+    let pascal = if !name.contains('-') && name.starts_with(|c: char| c.is_ascii_uppercase()) {
+        name.to_owned()
+    } else {
+        let mut out = String::with_capacity(name.len());
+        for word in name.split('-').filter(|w| !w.is_empty()) {
+            let mut chars = word.chars();
+            if let Some(first) = chars.next() {
+                out.extend(first.to_uppercase());
+                out.push_str(chars.as_str());
+            }
         }
+        out
+    };
+    gemini_alias(&pascal).to_owned()
+}
+
+/// Gemini CLI's names for events Claude Code already had. This is Gemini's own
+/// mapping, taken from the `gemini hooks migrate` command that converts Claude
+/// Code's hooks into its own.
+fn gemini_alias(name: &str) -> &str {
+    match name {
+        "BeforeAgent" => "UserPromptSubmit",
+        "AfterAgent" => "Stop",
+        "BeforeTool" => "PreToolUse",
+        "AfterTool" => "PostToolUse",
+        "PreCompress" => "PreCompact",
+        other => other,
     }
-    out
+}
+
+/// The tool an agent uses to put a question to the user and wait for an answer:
+/// `AskUserQuestion` in Claude Code, `ask_user` in Gemini CLI.
+fn is_question_tool(tool: Option<&str>) -> bool {
+    matches!(tool, Some("AskUserQuestion" | "ask_user"))
 }
 
 pub fn classify(ev: &HookEvent) -> Effect {
@@ -177,7 +200,7 @@ pub fn classify(ev: &HookEvent) -> Effect {
         "Stop" => Effect::Signal { kind: Attention::Done, wait: None },
         "StopFailure" => Effect::Signal { kind: Attention::Error, wait: None },
         "PermissionRequest" => Effect::Signal { kind: Attention::Approval, wait: id() },
-        "PreToolUse" if ev.tool_name.as_deref() == Some("AskUserQuestion") => {
+        "PreToolUse" if is_question_tool(ev.tool_name.as_deref()) => {
             Effect::Signal { kind: Attention::Question, wait: id() }
         }
         "PreToolUse" => Effect::Progress { tool_use_id: None },
@@ -296,6 +319,37 @@ mod tests {
         );
         assert_eq!(c(json!({"hook_event_name": "user-prompt-submit", "session_id": "s"})), Effect::Prompted);
         assert_eq!(c(json!({"hook_event_name": "session-start", "session_id": "s"})), Effect::SessionStarted);
+    }
+
+    #[test]
+    fn gemini_event_names_mean_the_same_as_claude_codes() {
+        // Gemini's own mapping, from its `gemini hooks migrate` command.
+        let name = |n: &str| ev(json!({"hook_event_name": n, "session_id": "s"})).name;
+        assert_eq!(name("AfterAgent"), "Stop");
+        assert_eq!(name("BeforeAgent"), "UserPromptSubmit");
+        assert_eq!(name("BeforeTool"), "PreToolUse");
+        assert_eq!(name("AfterTool"), "PostToolUse");
+        assert_eq!(name("PreCompress"), "PreCompact");
+        assert_eq!(name("SessionStart"), "SessionStart");
+
+        let c = |v| classify(&ev(v));
+        assert_eq!(
+            c(json!({"hook_event_name": "AfterAgent", "session_id": "s"})),
+            Effect::Signal { kind: Attention::Done, wait: None }
+        );
+        assert_eq!(c(json!({"hook_event_name": "BeforeAgent", "session_id": "s"})), Effect::Prompted);
+        // Gemini puts a question through `ask_user`, where Claude Code uses
+        // `AskUserQuestion`, and both wait for an answer.
+        assert_eq!(
+            c(
+                json!({"hook_event_name": "BeforeTool", "session_id": "s", "tool_name": "ask_user", "tool_use_id": "q1"})
+            ),
+            Effect::Signal { kind: Attention::Question, wait: Some("q1".to_owned()) }
+        );
+        assert_eq!(
+            c(json!({"hook_event_name": "BeforeTool", "session_id": "s", "tool_name": "run_shell_command"})),
+            Effect::Progress { tool_use_id: None }
+        );
     }
 
     #[test]

@@ -5,7 +5,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use clap::Subcommand;
-use flash_core::settings::{self, Change, Install, RemoteAgent};
+use flash_core::settings::{self, Change, Host, Install, RemoteAgent};
 use serde_json::Value;
 
 use super::{Env, Outcome, style};
@@ -39,6 +39,15 @@ pub enum HooksAction {
         /// This machine, as the other one reaches it: an address or a host name
         host: String,
     },
+    /// Add Claude Flash's hooks to Gemini CLI, so Gemini sessions flash as well
+    Gemini {
+        /// A settings file other than ~/.gemini/settings.json
+        #[arg(long)]
+        settings: Option<PathBuf>,
+        /// Print the result instead of writing it
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Add Claude Flash's hooks to Codex, so Codex sessions flash as well
     Codex {
         /// A hooks file other than ~/.codex/hooks.json
@@ -55,7 +64,7 @@ pub fn run(env: &Env, action: HooksAction) -> Outcome {
         HooksAction::Install { settings, dry_run } => {
             let path = settings.unwrap_or_else(paths::claude_settings);
             let program = std::env::current_exe().map_err(|e| format!("cannot locate this executable: {e}"))?;
-            let change = install(&path, &program, env.port(), dry_run)?;
+            let change = install(&path, &program, env.port(), Host::default(), dry_run)?;
             describe(&path, &change, dry_run);
         }
         HooksAction::Uninstall { settings, dry_run } => {
@@ -67,9 +76,18 @@ pub fn run(env: &Env, action: HooksAction) -> Outcome {
         }
         HooksAction::Status { settings } => {
             let path = settings.unwrap_or_else(paths::claude_settings);
-            println!("{}  {}", paths::display(&path), inspect(&path, env.port()));
+            println!("{}  {}", paths::display(&path), inspect(&path, env.port(), Host::default()));
         }
         HooksAction::Remote { host } => remote(env, &host)?,
+        HooksAction::Gemini { settings, dry_run } => {
+            let path = settings.unwrap_or_else(paths::gemini_settings);
+            let program = std::env::current_exe().map_err(|e| format!("cannot locate this executable: {e}"))?;
+            let change = install(&path, &program, env.port(), Host::Gemini, dry_run)?;
+            describe(&path, &change, dry_run);
+            if change.changed && !dry_run {
+                println!("{}", style::dim("Gemini sessions already open use these once restarted."));
+            }
+        }
         HooksAction::Codex { file, dry_run } => codex(file, dry_run)?,
     }
     Ok(())
@@ -119,7 +137,12 @@ fn remote(env: &Env, host: &str) -> Outcome {
     let token = store::read_token(&env.paths.token_file())
         .ok_or("there is no token yet; start the agent once with `flash agent start`")?;
     let url = format!("http://{host}:{}", env.port());
-    let spec = Install { port: env.port(), program: String::new(), remote: Some(RemoteAgent { url, token }) };
+    let spec = Install {
+        port: env.port(),
+        program: String::new(),
+        remote: Some(RemoteAgent { url, token }),
+        host: Host::default(),
+    };
     let change = settings::install(None, &spec).map_err(|e| e.to_string())?;
     // The settings go to stdout so they can be redirected to a file; everything the
     // reader has to do about it goes to stderr.
@@ -137,9 +160,9 @@ fn remote(env: &Env, host: &str) -> Outcome {
 }
 
 /// Installs the hooks in `path`, keeping a copy of the previous file.
-pub fn install(path: &Path, program: &Path, port: u16, dry_run: bool) -> Result<Change, String> {
+pub fn install(path: &Path, program: &Path, port: u16, host: Host, dry_run: bool) -> Result<Change, String> {
     let original = read(path)?;
-    let spec = Install { port, program: program.display().to_string(), remote: None };
+    let spec = Install { port, program: program.display().to_string(), remote: None, host };
     let change = settings::install(original.as_deref(), &spec).map_err(|e| e.to_string())?;
     if change.changed && !dry_run {
         write(path, original.as_deref(), &change.text)?;
@@ -209,14 +232,14 @@ pub fn installed_program(settings_text: &str) -> Option<String> {
 }
 
 /// One line on the state of the hooks in `path`.
-pub fn inspect(path: &Path, port: u16) -> String {
+pub fn inspect(path: &Path, port: u16, host: Host) -> String {
     let text = match read(path) {
         Ok(Some(text)) => text,
         Ok(None) => return style::yellow("not installed · run `flash hooks install`"),
         Err(e) => return style::red(&e),
     };
     let program = installed_program(&text);
-    let spec = Install { port, program: program.clone().unwrap_or_default(), remote: None };
+    let spec = Install { port, program: program.clone().unwrap_or_default(), remote: None, host };
     match settings::inspect(&text, &spec) {
         Err(e) => style::red(&e.to_string()),
         Ok(_) if settings::hooks_disabled(&text) => style::red("installed, but disableAllHooks turns every hook off"),
@@ -234,7 +257,7 @@ pub fn inspect(path: &Path, port: u16) -> String {
 }
 
 pub fn summary(env: &Env) -> String {
-    inspect(&paths::claude_settings(), env.port())
+    inspect(&paths::claude_settings(), env.port(), Host::default())
 }
 
 #[cfg(test)]
@@ -243,7 +266,8 @@ mod tests {
 
     #[test]
     fn finds_the_program_the_session_start_hook_runs() {
-        let spec = Install { port: 47_823, program: "/opt/flash/bin/flash".into(), remote: None };
+        let spec =
+            Install { port: 47_823, program: "/opt/flash/bin/flash".into(), remote: None, host: Host::default() };
         let text = settings::install(None, &spec).unwrap().text;
         assert_eq!(installed_program(&text).as_deref(), Some("/opt/flash/bin/flash"));
         assert_eq!(installed_program("{}"), None);

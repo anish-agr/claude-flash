@@ -326,6 +326,24 @@ These follow the same rules as signals from Claude Code: a pause, quiet hours,
 project rules and presence all apply. Other programs can call the local HTTP API
 directly; see [docs/api.md](docs/api.md).
 
+### Gemini CLI
+
+Gemini CLI keeps hooks in `~/.gemini/settings.json`, in the same shape as Claude
+Code's, and runs a command for each event:
+
+```bash
+flash hooks gemini
+```
+
+Hooks belonging to other tools in that file are left alone, and `flash hooks
+uninstall --settings ~/.gemini/settings.json` takes only ours out again.
+
+Gemini renames several of the events, and Claude Flash follows its mapping: a
+finished turn is `AfterAgent`, a submitted prompt is `BeforeAgent`, and tool calls
+are `BeforeTool` and `AfterTool`. Questions come through Gemini's `ask_user` tool,
+so done, question and the waits all work. Gemini has no separate approval event, so
+approvals arrive only if it raises a notification for them.
+
 ### Codex
 
 Codex keeps hooks in `~/.codex/hooks.json` and names its events the way Claude Code
