@@ -109,11 +109,29 @@ impl Envelope {
         }
     }
 
-    /// Starts fading out early because the user pressed a key or clicked. Ignored
-    /// before `min_visible_ms`, so a keystroke already in flight cannot hide a flash
-    /// before it is seen. Returns whether the dismissal took effect.
+    /// How long the flash must have been up before input can clear it.
+    ///
+    /// An ordinary flash only guards against a keystroke already in flight, so the
+    /// floor is `min_visible_ms`. A standby flash has to survive the hand that is
+    /// already on the mouse: somebody coming back to the desk moves it within a few
+    /// milliseconds of looking at the screen, and a flash cut off that fast is one
+    /// they never saw. So a held flash waits out the whole length an ordinary one
+    /// would have run before anything can dismiss it.
+    fn dismiss_floor(&self) -> u64 {
+        if self.timing.hold_until_input {
+            u64::from(self.timing.fade_in_ms)
+                + u64::from(self.timing.hold_ms)
+                + u64::from(self.timing.fade_out_ms.max(1))
+        } else {
+            u64::from(self.timing.min_visible_ms)
+        }
+    }
+
+    /// Starts fading out early because the user pressed a key, clicked or, for a
+    /// standby flash, moved the mouse. Ignored before [`Envelope::dismiss_floor`].
+    /// Returns whether the dismissal took effect.
     pub fn dismiss(&mut self, t: u64) -> bool {
-        if self.dismissed.is_some() || t < u64::from(self.timing.min_visible_ms) {
+        if self.dismissed.is_some() || t < self.dismiss_floor() {
             return false;
         }
         match self.alpha(t) {
@@ -297,7 +315,15 @@ mod tests {
         assert_eq!(e.total_ms(), None, "no end until somebody comes back");
         assert!(e.holding(70) && !e.holding(10), "only once it has risen");
 
+        // Nothing can clear it until it has been up as long as an ordinary flash
+        // would have lasted, so a hand already on the mouse cannot cut it short.
+        let ordinary = u64::from(T.fade_in_ms + T.hold_ms + T.fade_out_ms);
+        assert_eq!(ordinary, 1_050);
         assert!(!e.dismiss(50), "a keystroke already in flight cannot hide it");
+        assert!(!e.dismiss(ordinary - 1), "nor a mouse move a moment too early");
+        assert!(e.dismiss(ordinary), "but from then on, any input clears it");
+
+        let mut e = Envelope::new(held, 0.28, false);
         assert!(e.dismiss(60_000));
         assert!(!e.holding(60_000), "dismissed, so it is moving again");
         assert!(e.alpha(60_050).unwrap() < 0.28);

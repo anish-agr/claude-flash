@@ -10,7 +10,9 @@ Notable changes to Claude Flash. The format follows
 
 - Standby, from `presence.standby = true`: a signal raised while you count as away
   holds on screen until you touch the keyboard or mouse, instead of playing and
-  fading to an empty chair. The input that clears it is the same input that ends
+  fading to an empty chair. Nothing can clear it until it has been up as long as an
+  ordinary flash would have lasted, so a hand already on the mouse cannot cut it
+  short. The input that clears it is the same input that ends
   being away, so coming back shows you the signal and dismisses it. A held flash
   appears in `flash log` as `standby approval` rather than `flash approval`.
 - `flash hooks codex` writes a `~/.codex/hooks.json` that points Codex's hooks at the

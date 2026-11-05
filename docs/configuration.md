@@ -123,6 +123,11 @@ away_after = "5m"
 standby = true
 ```
 
+A held flash cannot be cleared until it has been up as long as an ordinary flash
+would have lasted, about a second with the default timing. Somebody coming back to
+the desk moves the mouse within a few milliseconds of looking at the screen, and
+without that floor the flash would be gone before they had read it.
+
 It is the signal's own colour and opacity, so a held flash is a tint you can read
 and work through rather than a cover over the screen, and the overlay ignores the
 mouse as always. `notify_when_away` and `push` are unchanged by it: turn them on as
