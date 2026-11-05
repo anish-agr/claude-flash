@@ -65,6 +65,12 @@ Notable changes to Agent Flash. The format follows
 
 ### Fixed
 
+- `flash install` stops instead of half-finishing when something is already
+  listening on the agent's port and will not answer, such as an agent holding a
+  token from another data folder. It used to read that as "nothing is running",
+  replace the programs and the hooks, and only then fail to start, leaving no agent
+  for the hooks it had just written.
+
 - `flash config set` says that `agent.port` and `agent.remote` take effect after a
   restart, instead of claiming the running agent applies them within a second.
 - A 401 from the agent now suggests `flash install` and a restart, rather than only

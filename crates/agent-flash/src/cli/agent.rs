@@ -14,6 +14,7 @@ use flash_core::settings::{self, LEGACY_SESSION_ENV_VAR, SESSION_ENV_VAR};
 
 use super::{Env, Outcome, agent_error};
 use crate::api::{Control, Health};
+use crate::client::ClientError;
 use crate::{paths, system};
 
 #[derive(Subcommand)]
@@ -113,8 +114,23 @@ pub fn start_program(env: &Env, program: &Path) -> Result<Health, String> {
 /// Asks the agent to quit and waits until it has. Returns whether one was running.
 pub fn stop(env: &Env) -> Result<bool, String> {
     let client = env.client();
-    if client.health().is_err() {
-        return Ok(false);
+    match client.health() {
+        Ok(_) => {}
+        // Nothing on the port, so nothing to stop.
+        Err(ClientError::NotRunning) => return Ok(false),
+        // Something is listening but will not answer: an agent holding a token from
+        // another data folder, or a build that does not speak this protocol. Saying
+        // "stopped" here would let an install replace the programs and the hooks and
+        // then fail to bind the port, leaving nothing running, so it stops here with
+        // everything still as it was.
+        Err(e) => {
+            return Err(format!(
+                "something is already listening on port {} and will not answer ({}); \
+                 stop it, then run this again",
+                env.port(),
+                agent_error(e)
+            ));
+        }
     }
     client.control(&Control::Quit).map_err(agent_error)?;
     wait_for(Duration::from_secs(6), || client.health().is_err().then_some(()))
