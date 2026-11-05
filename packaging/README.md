@@ -2,7 +2,7 @@
 
 | Folder | Package manager | Where it is published |
 |---|---|---|
-| `homebrew` | Homebrew, macOS | Copied to `Formula/claude-flash.rb` in [anish-agr/homebrew-tap](https://github.com/anish-agr/homebrew-tap) |
+| `homebrew` | Homebrew, macOS | Copied to `Formula/agent-flash.rb` in [anish-agr/homebrew-tap](https://github.com/anish-agr/homebrew-tap) |
 | `scoop` | Scoop, Windows | Read straight from this repository, by URL |
 | `winget` | WinGet, Windows | A pull request to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) |
 
@@ -16,7 +16,7 @@ expects it: a version manifest, an installer manifest and an English locale
 manifest, and nothing else, because the tools read every file in that folder.
 
 WinGet installs the release zip as a *portable* package: it unpacks the archive into
-`%LOCALAPPDATA%\Microsoft\WinGet\Packages\anish-agr.ClaudeFlash_…` and puts a `flash`
+`%LOCALAPPDATA%\Microsoft\WinGet\Packages\anish-agr.AgentFlash_…` and puts a `flash`
 alias on `PATH`. `flash-agent.exe` is unpacked alongside it, which is where `flash`
 looks for it. `flash install` recognises that folder and leaves the programs where
 WinGet put them, so `winget upgrade` replaces both of them in place.
@@ -47,7 +47,7 @@ exists, because the manifest carries the release's URL and checksum.
    ```
 
 4. Submit. `wingetcreate` forks `winget-pkgs` for you, puts the files in
-   `manifests/a/anish-agr/ClaudeFlash/2.3.0/` and opens the pull request:
+   `manifests/a/anish-agr/AgentFlash/2.3.0/` and opens the pull request:
 
    ```powershell
    wingetcreate submit --token <github-token> packaging\winget
@@ -61,14 +61,14 @@ exists, because the manifest carries the release's URL and checksum.
    package nobody has published before is also looked at by a person, so the first
    submission takes longer than the ones after it.
 
-5. Once the pull request is merged and `winget show anish-agr.ClaudeFlash` finds the
+5. Once the pull request is merged and `winget show anish-agr.AgentFlash` finds the
    package, add it to the README's install section, next to Homebrew and Scoop:
 
    ````markdown
    On Windows, with WinGet, which ships with Windows 11:
 
    ```powershell
-   winget install anish-agr.ClaudeFlash
+   winget install anish-agr.AgentFlash
    ```
    ````
 
@@ -76,11 +76,11 @@ exists, because the manifest carries the release's URL and checksum.
 
 ## Updating an existing version
 
-Once `anish-agr.ClaudeFlash` is in the repository, later versions need neither this
+Once `anish-agr.AgentFlash` is in the repository, later versions need neither this
 folder nor a fork by hand:
 
 ```powershell
-wingetcreate update anish-agr.ClaudeFlash --version 2.4.0 --urls <release-zip-url> --submit --token <github-token>
+wingetcreate update anish-agr.AgentFlash --version 2.4.0 --urls <release-zip-url> --submit --token <github-token>
 ```
 
 Keep the files here in step anyway, so the repository always shows what was

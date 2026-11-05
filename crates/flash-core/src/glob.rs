@@ -85,7 +85,7 @@ mod tests {
 
     #[test]
     fn basename_handles_both_separators() {
-        assert_eq!(basename(r"C:\work\claude-flash"), "claude-flash");
+        assert_eq!(basename(r"C:\work\agent-flash"), "agent-flash");
         assert_eq!(basename("/Users/a/pricetime/"), "pricetime");
         assert_eq!(basename("solo"), "solo");
     }

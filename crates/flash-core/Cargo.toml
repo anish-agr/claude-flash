@@ -1,6 +1,6 @@
 [package]
 name = "flash-core"
-description = "Platform-independent policy engine, configuration and Claude Code integration for Claude Flash"
+description = "Platform-independent policy engine, configuration and Claude Code integration for Agent Flash"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

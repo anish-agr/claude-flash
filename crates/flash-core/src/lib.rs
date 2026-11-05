@@ -1,4 +1,4 @@
-//! Platform-independent core of Claude Flash.
+//! Platform-independent core of Agent Flash.
 //!
 //! Everything that decides behaviour lives here and is free of I/O: the policy
 //! engine, configuration, Claude Code settings editing, the journal format, and the

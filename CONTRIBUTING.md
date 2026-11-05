@@ -5,7 +5,7 @@
 | Path | What it holds |
 |---|---|
 | `crates/flash-core` | The platform-independent core: policy engine, configuration, hook classification, flash rendering, the HTTP parser and the `settings.json` editor. No I/O and no `unsafe`. |
-| `crates/claude-flash` | The `flash` CLI and the `flash-agent` background process: HTTP server, runtime, journal, and the Windows and macOS front ends. |
+| `crates/agent-flash` | The `flash` CLI and the `flash-agent` background process: HTTP server, runtime, journal, and the Windows and macOS front ends. |
 | `spec/scenarios` | The engine's behaviour, as JSON scenarios run by `crates/flash-core/tests/scenarios.rs`. |
 | `docs` | Reference documentation. |
 | `packaging` | The Homebrew formula, the Scoop manifest and the WinGet manifests. |
@@ -27,7 +27,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-The integration tests in `crates/claude-flash/tests` start real agents in headless
+The integration tests in `crates/agent-flash/tests` start real agents in headless
 mode on free ports, each with its own data directory, so they never touch an
 installed copy.
 
@@ -39,7 +39,7 @@ rustup target add aarch64-apple-darwin
 ```
 
 ```bash
-cargo clippy -p claude-flash --all-targets --target aarch64-apple-darwin -- -D warnings
+cargo clippy -p agent-flash --all-targets --target aarch64-apple-darwin -- -D warnings
 ```
 
 ## Changing behaviour
@@ -68,7 +68,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
    notes.
 
    ```bash
-   git tag -a v2.2.0 -m "Claude Flash 2.2.0" && git push origin v2.2.0
+   git tag -a v2.2.0 -m "Agent Flash 2.2.0" && git push origin v2.2.0
    ```
 
 3. Once the release is published, point the packages at it and commit the result:
@@ -77,7 +77,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
    scripts/update-packages.sh 2.2.0
    ```
 
-4. Copy `packaging/homebrew/claude-flash.rb` to `Formula/claude-flash.rb` in
+4. Copy `packaging/homebrew/agent-flash.rb` to `Formula/agent-flash.rb` in
    [anish-agr/homebrew-tap](https://github.com/anish-agr/homebrew-tap). Scoop reads
    the manifest straight from this repository.
 

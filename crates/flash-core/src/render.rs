@@ -205,7 +205,7 @@ pub fn paint(buf: &mut [u8], width: usize, height: usize, color: Rgb, style: Sty
     }
 }
 
-/// Draws the Claude Flash icon, a shaded sphere, `size` pixels square in `color`,
+/// Draws the Agent Flash icon, a shaded sphere, `size` pixels square in `color`,
 /// with straight rather than premultiplied alpha. The tray and the menu bar show it
 /// in the colour of the current state.
 pub fn sphere(buf: &mut [u8], size: usize, color: Rgb, order: ByteOrder) {

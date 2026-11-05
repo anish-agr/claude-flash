@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Report vulnerabilities privately through
-[GitHub's private vulnerability reporting](https://github.com/anish-agr/claude-flash/security/advisories/new),
+[GitHub's private vulnerability reporting](https://github.com/anish-agr/agent-flash/security/advisories/new),
 not in a public issue. Include the version (`flash --version`), the operating
 system, and the steps to reproduce.
 
@@ -28,12 +28,12 @@ Endpoints are then split by what they can do:
 | Endpoint | Authentication | Effect |
 |---|---|---|
 | `GET /v1/health` | none | Reports the agent's name, version and process id |
-| `POST /v1/hooks/claude-code` | `X-Claude-Flash` header, and the token when `agent.remote` is on | Records a hook event, which may flash |
+| `POST /v1/hooks/claude-code` | `X-Agent-Flash` header, and the token when `agent.remote` is on | Records a hook event, which may flash |
 | `GET /v1/status`, `POST /v1/control`, `POST /v1/signal`, `GET /v1/events` | bearer token | Read status, change switches, raise signals, follow the journal |
 
 The token is 32 random bytes from the operating system, stored in the data
 directory. On macOS and Linux the file is created with mode `0600`; on Windows it
-sits in the user's profile folder (`~\.claude-flash`), which only that user can
+sits in the user's profile folder (`~\.agent-flash`), which only that user can
 read. Token comparison runs in constant time.
 
 While the agent is on loopback the hook endpoint needs no token, because Claude
@@ -61,7 +61,7 @@ it.
 ## Claude Code's behaviour is never changed
 
 Every hook response is an empty `200`. Claude Code treats that as a successful
-hook that makes no decision, so Claude Flash cannot approve, deny or block a tool
+hook that makes no decision, so Agent Flash cannot approve, deny or block a tool
 call, and cannot add anything to Claude's context. The `SessionStart` command hook
 prints nothing to standard output for the same reason.
 

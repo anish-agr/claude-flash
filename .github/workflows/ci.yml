@@ -63,7 +63,7 @@ jobs:
             name: macOS
     runs-on: ${{ matrix.os }}
     env:
-      CLAUDE_FLASH_HOME: ${{ github.workspace }}/.flash-home
+      AGENT_FLASH_HOME: ${{ github.workspace }}/.flash-home
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -72,7 +72,7 @@ jobs:
       - name: Start the agent with its native front end
         shell: bash
         run: |
-          mkdir -p "$CLAUDE_FLASH_HOME"
+          mkdir -p "$AGENT_FLASH_HOME"
           target/release/flash agent start
           target/release/flash status
       - name: Show every signal and check the agent survives it
@@ -132,31 +132,31 @@ jobs:
         shell: bash
         run: |
           target/release/flash agent stop || true
-          cat "$CLAUDE_FLASH_HOME/agent.log" || true
+          cat "$AGENT_FLASH_HOME/agent.log" || true
       - name: Clear any leftover login item (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         # A fresh install must set up start-at-login from nothing: no Run value and no
         # scheduled task to begin with.
         run: |
-          Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Claude Flash' -ErrorAction SilentlyContinue
-          schtasks /Delete /TN 'Claude Flash' /F 2>$null
+          Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Agent Flash' -ErrorAction SilentlyContinue
+          schtasks /Delete /TN 'Agent Flash' /F 2>$null
           exit 0
       - name: Install and uninstall as a user would
         shell: bash
         run: |
           set -euxo pipefail
-          unset CLAUDE_FLASH_HOME
+          unset AGENT_FLASH_HOME
           mkdir -p ~/.claude
           target/release/flash install
           target/release/flash status
           if [ "$RUNNER_OS" = Windows ]; then
-            schtasks //Query //TN "Claude Flash" > /dev/null
+            schtasks //Query //TN "Agent Flash" > /dev/null
             echo "start-at-login task created"
           fi
           target/release/flash uninstall --purge
           if [ "$RUNNER_OS" = Windows ]; then
-            if schtasks //Query //TN "Claude Flash" > /dev/null 2>&1; then
+            if schtasks //Query //TN "Agent Flash" > /dev/null 2>&1; then
               echo "the scheduled task is still there after uninstall" >&2
               exit 1
             fi

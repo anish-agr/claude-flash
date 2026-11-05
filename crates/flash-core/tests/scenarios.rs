@@ -1,6 +1,6 @@
 //! Runs every scenario in `spec/scenarios` against the policy engine.
 //!
-//! The scenarios are Claude Flash's behavioural specification. Each feeds a sequence
+//! The scenarios are Agent Flash's behavioural specification. Each feeds a sequence
 //! of hook events, API signals, control commands and clock movements to the engine
 //! and states exactly which flashes, notifications and suppressions must follow.
 

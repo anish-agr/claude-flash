@@ -1,8 +1,8 @@
-# Claude Flash
+# Agent Flash
 
 <img src="docs/images/icon.png" width="64" align="right" alt="">
 
-Claude Flash tints every display for about a second when Claude Code needs you:
+Agent Flash tints every display for about a second when Claude Code needs you:
 when a turn finishes, when Claude asks you something, when a tool call is waiting
 for your approval, and when a turn fails. Look away while Claude works; the flash
 brings you back.
@@ -44,13 +44,13 @@ Each block is one command.
 On macOS, with [Homebrew](https://brew.sh):
 
 ```bash
-brew install anish-agr/tap/claude-flash
+brew install anish-agr/tap/agent-flash
 ```
 
 On Windows, with [Scoop](https://scoop.sh):
 
 ```powershell
-scoop install https://raw.githubusercontent.com/anish-agr/claude-flash/main/packaging/scoop/claude-flash.json
+scoop install https://raw.githubusercontent.com/anish-agr/agent-flash/main/packaging/scoop/agent-flash.json
 ```
 
 Then, on either, add the hooks and start the agent:
@@ -59,9 +59,9 @@ Then, on either, add the hooks and start the agent:
 flash install
 ```
 
-To update with Homebrew, run `brew upgrade claude-flash` and then
+To update with Homebrew, run `brew upgrade agent-flash` and then
 `flash agent restart`. Scoop cannot replace a program that is running, so run
-`flash agent stop`, then `scoop update claude-flash`, then `flash agent start`.
+`flash agent stop`, then `scoop update agent-flash`, then `flash agent start`.
 
 ### Windows
 
@@ -72,15 +72,15 @@ cd $env:TEMP
 ```
 
 ```powershell
-curl.exe -fLO https://github.com/anish-agr/claude-flash/releases/latest/download/claude-flash-windows-x64.zip
+curl.exe -fLO https://github.com/anish-agr/agent-flash/releases/latest/download/agent-flash-windows-x64.zip
 ```
 
 ```powershell
-Expand-Archive claude-flash-windows-x64.zip -DestinationPath claude-flash -Force
+Expand-Archive agent-flash-windows-x64.zip -DestinationPath agent-flash -Force
 ```
 
 ```powershell
-.\claude-flash\flash.exe install
+.\agent-flash\flash.exe install
 ```
 
 Type `curl.exe` in full: in Windows PowerShell, `curl` on its own runs a different
@@ -95,15 +95,15 @@ cd "$TMPDIR"
 ```
 
 ```bash
-curl -fLO https://github.com/anish-agr/claude-flash/releases/latest/download/claude-flash-macos-universal.tar.gz
+curl -fLO https://github.com/anish-agr/agent-flash/releases/latest/download/agent-flash-macos-universal.tar.gz
 ```
 
 ```bash
-mkdir -p claude-flash && tar -xzf claude-flash-macos-universal.tar.gz -C claude-flash
+mkdir -p agent-flash && tar -xzf agent-flash-macos-universal.tar.gz -C agent-flash
 ```
 
 ```bash
-./claude-flash/flash install
+./agent-flash/flash install
 ```
 
 The programs go in `~/.local/bin`, which is not on the macOS `PATH` unless
@@ -135,7 +135,7 @@ With Rust 1.88 or later. Cargo clones the repository, builds both programs and p
 them in `~/.cargo/bin`, which its own installer already added to your `PATH`:
 
 ```bash
-cargo install --locked --git https://github.com/anish-agr/claude-flash claude-flash
+cargo install --locked --git https://github.com/anish-agr/agent-flash agent-flash
 ```
 
 ```bash
@@ -155,11 +155,11 @@ Control; see [Troubleshooting](#troubleshooting).
    Windows, which is already on the `PATH`, or to `~/.local/bin` on macOS, unless
    `--bin-dir` names another folder.
 2. Writes a commented `config.toml`, unless one exists. The settings, the token and
-   the journal live in `~\.claude-flash` on Windows and in
-   `~/Library/Application Support/claude-flash` on macOS.
+   the journal live in `~\.agent-flash` on Windows and in
+   `~/Library/Application Support/agent-flash` on macOS.
 3. Adds hooks to `~/.claude/settings.json`. Every other setting and every other
    tool's hooks keep their content and their position, and the previous file is
-   saved next to it as `settings.json.claude-flash-backup`.
+   saved next to it as `settings.json.agent-flash-backup`.
 4. Registers the agent to start at login: a scheduled task on Windows, a LaunchAgent
    on macOS.
 5. Starts the agent.
@@ -179,8 +179,8 @@ flash uninstall
 
 This stops the agent and removes the hooks and the login item. Add `--purge` to
 delete the settings, the journal and the saved state as well. The programs stay. If
-Homebrew or Scoop installed them, remove them with `brew uninstall claude-flash` or
-`scoop uninstall claude-flash`; otherwise delete them. On Windows:
+Homebrew or Scoop installed them, remove them with `brew uninstall agent-flash` or
+`scoop uninstall agent-flash`; otherwise delete them. On Windows:
 
 ```powershell
 Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\flash.exe", "$env:LOCALAPPDATA\Microsoft\WindowsApps\flash-agent.exe"
@@ -213,8 +213,8 @@ The screen flashes green when the turn ends, and the journal says what arrived:
 
 ```text
 $ flash log --since 15m
-15:05:08  done      held back: background session  claude-flash
-15:10:19  done      flash                          claude-flash
+15:05:08  done      held back: background session  agent-flash
+15:10:19  done      flash                          agent-flash
 15:14:43  done      flash                          terminal-check
 ```
 
@@ -233,13 +233,13 @@ it finds:
 
 ```text
 $ flash doctor
-Claude Flash 2.2.0
+Agent Flash 2.2.0
 ✓ agent     running · pid 33972 · 127.0.0.1:47823
-✓ settings  ~\.claude-flash\config.toml
+✓ settings  ~\.agent-flash\config.toml
 ✓ hooks     13 events · ~\.claude\settings.json
 ✓ at login  ~\AppData\Local\Microsoft\WindowsApps\flash-agent.exe
 ✓ activity  last hook event PostToolUse 48s ago
-✓ journal   ~\.claude-flash\journal · 2 KB · kept 30 days
+✓ journal   ~\.agent-flash\journal · 2 KB · kept 30 days
 ```
 
 ## Usage
@@ -247,11 +247,11 @@ Claude Flash 2.2.0
 ```text
 $ flash status
 ● on  agent 2.2.0 · pid 11208 · up 3h 12m
-waiting   approval  Write in claude-flash  1m 20s · session 3aee9676
+waiting   approval  Write in agent-flash  1m 20s · session 3aee9676
           question  pricetime  6s · session 91b0c2d4
 today     14 done · 3 questions · 5 approvals · 0 errors · 21 flashes · 4 held back
 hooks     installed
-config    ~\.claude-flash\config.toml
+config    ~\.agent-flash\config.toml
 ```
 
 | Command | What it does |
@@ -276,7 +276,7 @@ config    ~\.claude-flash\config.toml
 
 ### Tray icon and menu bar item
 
-The icon is the Claude Flash sphere in the colour of the current state: green when
+The icon is the Agent Flash sphere in the colour of the current state: green when
 on, the waiting signal's colour while Claude is blocked on you, amber while paused
 and grey when off. Its menu lists what is waiting, turns flashes on and off, pauses
 them, shows test flashes, chooses whether the agent starts at login, and opens the
@@ -286,7 +286,7 @@ settings file and the journal folder.
 
 ```text
 $ flash stats
-Claude Flash · the last 7d
+Agent Flash · the last 7d
 
 signals   142 done   18 questions   37 approvals   2 errors
 shown as  171 flashes · 21 notifications · 3 pushes · 44 held back
@@ -298,7 +298,7 @@ by hour   ·······▁▂▅▇█▆▄▅▇▆▄▂▁▁····
           0     6     12    18   23
 
 projects  pricetime     88 signals  31m 10s waiting
-          claude-flash  61 signals  12m 40s waiting
+          agent-flash  61 signals  12m 40s waiting
 ```
 
 The journal is one JSON object per line, one file per day, kept for 30 days. See
@@ -338,7 +338,7 @@ flash hooks gemini
 Hooks belonging to other tools in that file are left alone, and `flash hooks
 uninstall --settings ~/.gemini/settings.json` takes only ours out again.
 
-Gemini renames several of the events, and Claude Flash follows its mapping: a
+Gemini renames several of the events, and Agent Flash follows its mapping: a
 finished turn is `AfterAgent`, a submitted prompt is `BeforeAgent`, and tool calls
 are `BeforeTool` and `AfterTool`. Questions come through Gemini's `ask_user` tool,
 so done, question and the waits all work. Gemini has no separate approval event, so
@@ -364,7 +364,7 @@ up to date. It has no equivalent of Claude Code's `AskUserQuestion` tool or of
 `StopFailure`, so the question and error signals stay Claude Code's.
 
 How far this is confirmed, as of Codex 0.164: Codex reads and validates the file
-Claude Flash writes, down to clamping a timeout it thinks is too long, and reports no
+Agent Flash writes, down to clamping a timeout it thinks is too long, and reports no
 complaint about it. Hooks did not run in a non-interactive `codex exec` run, though,
 so check an interactive session before relying on it: start Codex, let a turn finish,
 and run `flash log --since 5m --all`. An entry means the hooks are arriving. Nothing
@@ -394,7 +394,7 @@ flash hooks remote 192.168.1.5
 ```
 
 The settings go to standard output; merge them into `~/.claude/settings.json` over
-there. Claude Flash does not need to be installed on that machine, because the
+there. Agent Flash does not need to be installed on that machine, because the
 hooks are plain HTTP. They carry this agent's token, so treat that file as a
 secret.
 
@@ -405,23 +405,23 @@ WSL's mirrored networking, `127.0.0.1` reaches the host directly.
 
 ### Scripted runs
 
-Claude Code sessions started with `CLAUDE_FLASH=off` in their environment are left
+Claude Code sessions started with `AGENT_FLASH=off` in their environment are left
 out entirely:
 
 ```bash
-CLAUDE_FLASH=off claude -p "Summarise the changes on this branch"
+AGENT_FLASH=off claude -p "Summarise the changes on this branch"
 ```
 
 In PowerShell:
 
 ```powershell
-$env:CLAUDE_FLASH = "off"; claude -p "Summarise the changes on this branch"
+$env:AGENT_FLASH = "off"; claude -p "Summarise the changes on this branch"
 ```
 
 ## Configuration
 
-`config.toml` is in `~\.claude-flash` on Windows and in
-`~/Library/Application Support/claude-flash` on macOS; `flash config edit` opens
+`config.toml` is in `~\.agent-flash` on Windows and in
+`~/Library/Application Support/agent-flash` on macOS; `flash config edit` opens
 it. The agent applies changes within a second. If the file has a mistake, `flash
 status` and `flash doctor` say so and the previous settings stay in effect.
 
@@ -494,7 +494,7 @@ the agent on `127.0.0.1:47823`, and one command hook: each session runs
 | `SessionStart`, `SessionEnd` | Session bookkeeping |
 
 The agent answers every hook with an empty `200`, which Claude Code treats as a
-hook that made no decision. Claude Flash cannot approve, deny or delay anything.
+hook that made no decision. Agent Flash cannot approve, deny or delay anything.
 
 What an event means is decided by the policy engine in `flash-core`, which does no
 I/O and reads no clock of its own. Its behaviour is specified by the
@@ -573,7 +573,7 @@ Event Viewer check that confirms Smart App Control is the cause.
 **A terminal reports `missing or incorrect API token`, but flashes still work.** You
 installed from inside a packaged app, such as the Claude desktop app, which keeps a
 program's `AppData` writes in a private copy that your terminals cannot see. Run
-`flash install` once: it moves the token and settings to `~\.claude-flash`, which
+`flash install` once: it moves the token and settings to `~\.agent-flash`, which
 every program shares.
 
 [docs/getting-started.md](docs/getting-started.md#if-something-is-wrong) covers
@@ -599,5 +599,5 @@ platform.
 
 ## License
 
-[MIT](LICENSE). Claude Flash is an independent project and is not affiliated with
+[MIT](LICENSE). Agent Flash is an independent project and is not affiliated with
 or endorsed by Anthropic.

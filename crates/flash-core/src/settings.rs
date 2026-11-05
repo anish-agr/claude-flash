@@ -1,7 +1,7 @@
 //! Hook registration in Claude Code's `settings.json`.
 //!
 //! That file belongs to the user and to every other tool they run, so each edit here
-//! is surgical: only entries Claude Flash owns are removed or added, everything else
+//! is surgical: only entries Agent Flash owns are removed or added, everything else
 //! keeps its content and its position, and a file that does not parse is refused
 //! rather than overwritten.
 
@@ -9,17 +9,23 @@ use std::fmt;
 
 use serde_json::{Map, Value, json};
 
-/// Header carried by every HTTP hook Claude Flash installs. Claude Code sends it to
+/// Header carried by every HTTP hook Agent Flash installs. Claude Code sends it to
 /// the agent, and in `settings.json` it marks the entry as ours.
-pub const MARKER_HEADER: &str = "X-Claude-Flash";
+pub const MARKER_HEADER: &str = "X-Agent-Flash";
 pub const HOOK_VERSION: &str = "2";
-/// Carries the session's `CLAUDE_FLASH` environment variable to the agent, so a
-/// script can start Claude Code with `CLAUDE_FLASH=off` and keep its sessions out.
-pub const SESSION_HEADER: &str = "X-Claude-Flash-Session";
-pub const SESSION_ENV_VAR: &str = "CLAUDE_FLASH";
+/// Carries the session's `AGENT_FLASH` environment variable to the agent, so a
+/// script can start Claude Code with `AGENT_FLASH=off` and keep its sessions out.
+pub const SESSION_HEADER: &str = "X-Agent-Flash-Session";
+pub const SESSION_ENV_VAR: &str = "AGENT_FLASH";
+/// What the marker header and the opt-out variable were called when this program
+/// only covered Claude Code. Hooks installed then still carry the old header, so it
+/// is still recognised as ours and replaced, and `CLAUDE_FLASH=off` still works.
+pub const LEGACY_MARKER_HEADER: &str = "X-Claude-Flash";
+pub const LEGACY_SESSION_HEADER: &str = "X-Claude-Flash-Session";
+pub const LEGACY_SESSION_ENV_VAR: &str = "CLAUDE_FLASH";
 pub const INGRESS_PATH: &str = "/v1/hooks/claude-code";
 
-/// Every event Claude Flash listens to, with the matcher each one needs.
+/// Every event Agent Flash listens to, with the matcher each one needs.
 pub const SUBSCRIPTIONS: &[(&str, Option<&str>)] = &[
     ("SessionStart", None),
     ("UserPromptSubmit", None),
@@ -36,7 +42,7 @@ pub const SUBSCRIPTIONS: &[(&str, Option<&str>)] = &[
     ("SessionEnd", None),
 ];
 
-/// Every Gemini CLI event Claude Flash listens to, under Gemini's own names. Gemini
+/// Every Gemini CLI event Agent Flash listens to, under Gemini's own names. Gemini
 /// publishes the mapping itself in `gemini hooks migrate`: `BeforeAgent` is Claude
 /// Code's `UserPromptSubmit`, `AfterAgent` its `Stop`, and so on. Only the tool
 /// events take a matcher, as Gemini's own examples show.
@@ -104,7 +110,7 @@ pub fn ingress_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}{INGRESS_PATH}")
 }
 
-/// Whether a session's `CLAUDE_FLASH` value keeps it out: `off`, `0`, `false` or `no`.
+/// Whether a session's `AGENT_FLASH` value keeps it out: `off`, `0`, `false` or `no`.
 pub fn session_opted_out(value: &str) -> bool {
     matches!(value.trim().to_ascii_lowercase().as_str(), "off" | "0" | "false" | "no")
 }
@@ -221,13 +227,11 @@ pub fn hooks_disabled(original: &str) -> bool {
     load(Some(original)).is_ok_and(|(root, _)| root.get("disableAllHooks").and_then(Value::as_bool) == Some(true))
 }
 
-/// Whether a hook entry was written by Claude Flash, in this version or v1.
+/// Whether a hook entry was written by Agent Flash, in this version or v1.
 pub fn is_flash_hook(hook: &Value) -> bool {
-    if hook
-        .get("headers")
-        .and_then(Value::as_object)
-        .is_some_and(|h| h.keys().any(|k| k.eq_ignore_ascii_case(MARKER_HEADER)))
-    {
+    if hook.get("headers").and_then(Value::as_object).is_some_and(|h| {
+        h.keys().any(|k| k.eq_ignore_ascii_case(MARKER_HEADER) || k.eq_ignore_ascii_case(LEGACY_MARKER_HEADER))
+    }) {
         return true;
     }
     let Some(command) = hook.get("command").and_then(Value::as_str) else { return false };
@@ -272,13 +276,14 @@ fn desired_group(event: &str, matcher: Option<&str>, spec: &Install) -> Value {
     // hooks runs `flash hook`, which starts the agent if it is down and hands the
     // event over. Its timeout is in milliseconds, unlike Claude Code's seconds.
     let hook = if spec.host == Host::Gemini {
-        json!({"type": "command", "command": spec.program, "args": ["hook"], "name": "claude-flash", "timeout": 10_000})
+        json!({"type": "command", "command": spec.program, "args": ["hook"], "name": "agent-flash", "timeout": 10_000})
     } else if event == "SessionStart" && spec.remote.is_none() {
         json!({"type": "command", "command": spec.program, "args": ["agent", "ensure"], "timeout": 30})
     } else {
         let mut headers = Map::new();
         headers.insert(MARKER_HEADER.into(), HOOK_VERSION.into());
         headers.insert(SESSION_HEADER.into(), format!("${{{SESSION_ENV_VAR}}}").into());
+        headers.insert(LEGACY_SESSION_HEADER.into(), format!("${{{LEGACY_SESSION_ENV_VAR}}}").into());
         if let Some(remote) = &spec.remote {
             headers.insert("Authorization".into(), format!("Bearer {}", remote.token).into());
         }
@@ -287,7 +292,7 @@ fn desired_group(event: &str, matcher: Option<&str>, spec: &Install) -> Value {
             "url": spec.url(),
             "timeout": 5,
             "headers": headers,
-            "allowedEnvVars": [SESSION_ENV_VAR],
+            "allowedEnvVars": [SESSION_ENV_VAR, LEGACY_SESSION_ENV_VAR],
         })
     };
     let mut group = Map::new();
@@ -319,7 +324,7 @@ fn hooks_mut(root: &mut Map<String, Value>) -> Result<&mut Map<String, Value>, S
         .ok_or_else(|| SettingsError::Malformed("hooks is not an object".into()))
 }
 
-/// Removes every Claude Flash hook, dropping groups and events that only existed to
+/// Removes every Agent Flash hook, dropping groups and events that only existed to
 /// hold them. Returns how many hooks were removed.
 fn strip(hooks: &mut Map<String, Value>) -> Result<usize, SettingsError> {
     let mut removed = 0;
@@ -362,7 +367,7 @@ fn finish(original: Option<&str>, before: Value, root: Map<String, Value>, remov
     Change { text, changed: true, removed, added }
 }
 
-/// Every Codex event Claude Flash listens to. Codex names them as Claude Code does,
+/// Every Codex event Agent Flash listens to. Codex names them as Claude Code does,
 /// which is how its own bundled plugins write them, even though it spells the same
 /// events in kebab case inside a payload. It has no equivalent of Claude Code's
 /// `AskUserQuestion` tool or of `StopFailure`, so Codex drives the done and approval
@@ -386,7 +391,7 @@ pub fn codex_hooks(program: &str) -> Value {
     json!({ "hooks": Value::Object(events) })
 }
 
-/// Whether a `hooks.json` holds nothing but Claude Flash's own hooks, so replacing it
+/// Whether a `hooks.json` holds nothing but Agent Flash's own hooks, so replacing it
 /// outright loses nobody else's work.
 pub fn codex_hooks_are_only_ours(original: &str) -> bool {
     let Ok(value) = serde_json::from_str::<Value>(original.trim_start_matches('\u{feff}')) else {
@@ -411,13 +416,13 @@ mod tests {
     fn spec() -> Install {
         Install {
             port: 47_823,
-            program: r"C:\Program Files\Claude Flash\flash.exe".into(),
+            program: r"C:\Program Files\Agent Flash\flash.exe".into(),
             remote: None,
             host: Host::default(),
         }
     }
 
-    /// Shaped like a real file: another tool's hooks around a v1 Claude Flash hook.
+    /// Shaped like a real file: another tool's hooks around a v1 Agent Flash hook.
     const EXISTING: &str = r#"{
   "permissions": {
     "allow": [
@@ -509,7 +514,7 @@ mod tests {
             .map(|h| h["name"].as_str().unwrap_or("?"))
             .collect();
         assert!(names.contains(&"other-guard"), "another tool's hook was lost: {names:?}");
-        assert!(names.contains(&"claude-flash"));
+        assert!(names.contains(&"agent-flash"));
 
         // Every hook of ours runs `flash hook`, and Gemini counts its timeout in ms.
         let ours = &v["hooks"]["AfterAgent"][0]["hooks"][0];
@@ -572,7 +577,7 @@ mod tests {
         let v = parse(&install(None, &spec()).unwrap().text);
         assert_eq!(
             v["hooks"]["SessionStart"][0]["hooks"],
-            json!([{"type": "command", "command": r"C:\Program Files\Claude Flash\flash.exe", "args": ["agent", "ensure"], "timeout": 30}])
+            json!([{"type": "command", "command": r"C:\Program Files\Agent Flash\flash.exe", "args": ["agent", "ensure"], "timeout": 30}])
         );
     }
 
@@ -582,8 +587,40 @@ mod tests {
         let hook = &v["hooks"]["PermissionRequest"][0]["hooks"][0];
         assert_eq!(hook["type"], "http");
         assert_eq!(hook["headers"][MARKER_HEADER], HOOK_VERSION);
-        assert_eq!(hook["headers"][SESSION_HEADER], "${CLAUDE_FLASH}");
-        assert_eq!(hook["allowedEnvVars"], json!(["CLAUDE_FLASH"]));
+        assert_eq!(hook["headers"][SESSION_HEADER], "${AGENT_FLASH}");
+        // Both opt-out variables travel, so `CLAUDE_FLASH=off` still silences a
+        // session after the rename.
+        assert_eq!(hook["headers"][LEGACY_SESSION_HEADER], "${CLAUDE_FLASH}");
+        assert_eq!(hook["allowedEnvVars"], json!(["AGENT_FLASH", "CLAUDE_FLASH"]));
+    }
+
+    #[test]
+    fn hooks_installed_under_the_old_name_are_recognised_and_replaced() {
+        // What version 2.2 wrote: the same hook, under the old marker header.
+        let old = r#"{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "http", "url": "http://127.0.0.1:47823/v1/hooks/claude-code",
+            "headers": { "X-Claude-Flash": "2", "X-Claude-Flash-Session": "${CLAUDE_FLASH}" } },
+          { "type": "command", "command": "notify-send done" }
+        ]
+      }
+    ]
+  }
+}"#;
+        let change = install(Some(old), &spec()).unwrap();
+        assert_eq!(change.removed, 1, "the hook under the old name is ours, so it goes");
+        let v = parse(&change.text);
+        let stop = v["hooks"]["Stop"].as_array().unwrap();
+        let hooks: Vec<&Value> = stop.iter().flat_map(|g| g["hooks"].as_array().unwrap()).collect();
+        assert!(hooks.iter().any(|h| h["command"] == "notify-send done"), "another tool's hook stays");
+        assert!(hooks.iter().any(|h| h["headers"][MARKER_HEADER] == HOOK_VERSION), "ours is back, renamed");
+        assert!(
+            !hooks.iter().any(|h| h["headers"][LEGACY_MARKER_HEADER] == HOOK_VERSION),
+            "and the old one is not left behind as a duplicate"
+        );
     }
 
     #[test]
@@ -656,7 +693,7 @@ mod tests {
             assert!(session_opted_out(value), "{value:?}");
         }
         // An unset variable interpolates to nothing, or stays literal in older clients.
-        for value in ["", "on", "1", "${CLAUDE_FLASH}", "quiet"] {
+        for value in ["", "on", "1", "${AGENT_FLASH}", "quiet"] {
             assert!(!session_opted_out(value), "{value:?}");
         }
     }

@@ -158,7 +158,7 @@ mod tests {
             event: "PermissionRequest".into(),
             kind: Some(Attention::Approval),
             session: Some("3aee9676".into()),
-            project: Some("claude-flash".into()),
+            project: Some("agent-flash".into()),
             tool: Some("Bash".into()),
             delivered: vec![Channel::Flash],
             ..Record::default()
@@ -166,7 +166,7 @@ mod tests {
         let line = r.to_line();
         assert_eq!(
             line,
-            "{\"ts\":\"2026-09-10T18:22:01.123Z\",\"tz\":-420,\"event\":\"PermissionRequest\",\"kind\":\"approval\",\"session\":\"3aee9676\",\"project\":\"claude-flash\",\"tool\":\"Bash\",\"delivered\":[\"flash\"]}\n"
+            "{\"ts\":\"2026-09-10T18:22:01.123Z\",\"tz\":-420,\"event\":\"PermissionRequest\",\"kind\":\"approval\",\"session\":\"3aee9676\",\"project\":\"agent-flash\",\"tool\":\"Bash\",\"delivered\":[\"flash\"]}\n"
         );
         assert_eq!(Record::parse_line(&line), Some(r));
     }

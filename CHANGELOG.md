@@ -1,6 +1,6 @@
 # Changelog
 
-Notable changes to Claude Flash. The format follows
+Notable changes to Agent Flash. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
@@ -29,15 +29,28 @@ Notable changes to Claude Flash. The format follows
   `AskUserQuestion` or `StopFailure`, so question and error stay Claude Code's. Codex
   validates the file but did not run hooks in a non-interactive `codex exec` run, so
   the README says how to confirm it in an interactive one.
-- WinGet manifests in `packaging/winget`, so Claude Flash can be published to the
+- WinGet manifests in `packaging/winget`, so Agent Flash can be published to the
   Windows Package Manager. `flash install` recognises a WinGet install the way it
   already recognises Homebrew and Scoop, and leaves the programs where WinGet
   unpacked them so `winget upgrade` replaces them in place.
 
 ### Changed
 
-- On Windows, Claude Flash now keeps its token, settings and journal in
-  `~\.claude-flash`, next to Claude Code's own `~\.claude`, instead of under
+- Renamed from Claude Flash to Agent Flash, because it now covers Claude Code, Codex
+  and Gemini CLI rather than one of them. The programs are still `flash` and
+  `flash-agent`, and nothing has to be set up again: `flash install` moves the
+  settings, token and journal out of the old folder, replaces the hooks it finds
+  under the old marker header, deletes the old scheduled task and desktop shortcut,
+  and leaves other tools' hooks alone. `CLAUDE_FLASH_HOME` still works as a home, and
+  `CLAUDE_FLASH=off` still keeps a session quiet.
+  - Data moved to `~\.agent-flash` on Windows, `~/Library/Application
+    Support/agent-flash` on macOS and `agent-flash` under the XDG directories on
+    Linux.
+  - The package is `agent-flash` in Homebrew, Scoop and WinGet, and the release
+    archives are named `agent-flash-*`.
+
+- On Windows, Agent Flash now keeps its token, settings and journal in
+  `~\.agent-flash`, next to Claude Code's own `~\.claude`, instead of under
   `%LOCALAPPDATA%`. A packaged host such as the Claude desktop app redirects the
   `AppData` writes its child processes make into a private per-app copy, so a token
   written there was invisible to the user's own terminals, which then failed with a
@@ -56,7 +69,7 @@ Notable changes to Claude Flash. The format follows
   restart, instead of claiming the running agent applies them within a second.
 - A 401 from the agent now suggests `flash install` and a restart, rather than only
   repeating the server's "missing or incorrect API token".
-- After moving a Windows install to `~\.claude-flash`, the old `%LOCALAPPDATA%`
+- After moving a Windows install to `~\.agent-flash`, the old `%LOCALAPPDATA%`
   folder is removed once the token and settings are safely across, and `flash
   uninstall --purge` clears it as well.
 - `flash` finds `flash-agent` when it was started through an alias that only points
@@ -120,7 +133,7 @@ A rewrite in Rust with macOS support, built around a background agent.
   reminders while Claude stays blocked.
 - A journal of signals, with `flash log`, `flash watch` and `flash stats`.
 - A local API for raising signals from other tools, and `flash signal`.
-- `CLAUDE_FLASH=off` in a session's environment keeps its events out.
+- `AGENT_FLASH=off` in a session's environment keeps its events out.
 - `flash doctor`, `flash config`, `flash hooks`, `flash install`, `flash uninstall`
   and shell completions.
 - Reduced-motion support, and a limit of three flashes per second however many

@@ -5,7 +5,7 @@
 
 ## Components
 
-Claude Flash is a Rust workspace with two crates.
+Agent Flash is a Rust workspace with two crates.
 
 **`flash-core`** holds everything that does not depend on an operating system, and
 does no I/O:
@@ -21,7 +21,7 @@ does no I/O:
 | `journal`, `stats` | Journal records, and summaries of them |
 | `color`, `duration`, `glob`, `time` | Small value types and helpers |
 
-**`claude-flash`** builds two programs. `flash-agent` runs in the background:
+**`agent-flash`** builds two programs. `flash-agent` runs in the background:
 
 ```mermaid
 flowchart LR
@@ -55,8 +55,8 @@ settings file and `settings.json` itself.
 | `PreToolUse` | `AskUserQuestion` | HTTP |
 
 HTTP hooks post the event to the agent without starting a process. Each carries
-the header `X-Claude-Flash`, which also marks the entry as Claude Flash's when
-`settings.json` is edited again, and `X-Claude-Flash-Session: ${CLAUDE_FLASH}`,
+the header `X-Agent-Flash`, which also marks the entry as Agent Flash's when
+`settings.json` is edited again, and `X-Agent-Flash-Session: ${AGENT_FLASH}`,
 which Claude Code fills from the session's environment. A value of `off` drops the
 event.
 
@@ -67,7 +67,7 @@ form, without a shell. It checks the agent's health, starts it if needed, forwar
 the `SessionStart` event itself, and prints nothing, since anything a
 `SessionStart` hook prints becomes part of Claude's context.
 
-Editing `settings.json` removes only entries Claude Flash wrote, in this version
+Editing `settings.json` removes only entries Agent Flash wrote, in this version
 or 1.x, and appends its own groups after everyone else's. Top-level keys keep their
 order. A file that does not parse is left untouched, and a file whose meaning would
 not change is not rewritten at all.

@@ -1,6 +1,6 @@
 {
   "title": "While you are away, signals go to notifications and your phone; your return gets one flash",
-  "config": "[push]\nurl = \"https://ntfy.sh/claude-flash-example\"\nafter = \"10m\"\n",
+  "config": "[push]\nurl = \"https://ntfy.sh/agent-flash-example\"\nafter = \"10m\"\n",
   "steps": [
     { "at": "0s", "hook": { "hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": "/work/app" } },
     {

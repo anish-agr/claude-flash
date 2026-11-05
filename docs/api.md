@@ -35,14 +35,14 @@ needs the bearer token the agent creates in its data directory on first start:
 
 | Platform | Token file |
 |---|---|
-| Windows | `%USERPROFILE%\.claude-flash\token` |
-| macOS | `~/Library/Application Support/claude-flash/token` |
-| Linux | `$XDG_STATE_HOME/claude-flash/token`, by default `~/.local/state/claude-flash/token` |
+| Windows | `%USERPROFILE%\.agent-flash\token` |
+| macOS | `~/Library/Application Support/agent-flash/token` |
+| Linux | `$XDG_STATE_HOME/agent-flash/token`, by default `~/.local/state/agent-flash/token` |
 
-With `CLAUDE_FLASH_HOME` set, the token is in that directory instead.
+With `AGENT_FLASH_HOME` set, the token is in that directory instead.
 
 ```bash
-TOKEN=$(cat "$HOME/Library/Application Support/claude-flash/token")
+TOKEN=$(cat "$HOME/Library/Application Support/agent-flash/token")
 ```
 
 ```bash
@@ -52,7 +52,7 @@ curl -s http://127.0.0.1:47823/v1/status -H "Authorization: Bearer $TOKEN"
 In PowerShell:
 
 ```powershell
-$token = Get-Content "$env:USERPROFILE\.claude-flash\token"
+$token = Get-Content "$env:USERPROFILE\.agent-flash\token"
 ```
 
 ```powershell
@@ -82,7 +82,7 @@ Errors are JSON with a message:
 Whether an agent is listening, and which.
 
 ```json
-{ "name": "claude-flash", "version": "2.2.0", "api": 1, "pid": 20412 }
+{ "name": "agent-flash", "version": "2.2.0", "api": 1, "pid": 20412 }
 ```
 
 ## `POST /v1/hooks/claude-code`
@@ -93,8 +93,8 @@ unchanged. Only these fields are read: `hook_event_name`, `session_id`, `cwd`,
 
 | Header | |
 |---|---|
-| `X-Claude-Flash` | Required. Marks the request as coming from a Claude Flash hook |
-| `X-Claude-Flash-Session` | Optional. `off`, `0`, `false` or `no` drops the event without processing it |
+| `X-Agent-Flash` | Required. Marks the request as coming from a Agent Flash hook |
+| `X-Agent-Flash-Session` | Optional. `off`, `0`, `false` or `no` drops the event without processing it |
 
 The response is always `200` with an empty body, which Claude Code treats as a
 successful hook with no decision.
@@ -112,13 +112,13 @@ successful hook with no decision.
   "paused_for_ms": null,
   "away": false,
   "waiting": [
-    { "kind": "approval", "project": "claude-flash", "session": "3aee9676", "tool": "Bash", "for_ms": 80213 }
+    { "kind": "approval", "project": "agent-flash", "session": "3aee9676", "tool": "Bash", "for_ms": 80213 }
   ],
   "today": { "done": 14, "question": 3, "approval": 5, "error": 0, "flashes": 21, "suppressed": 4 },
-  "config_path": "C:\\Users\\you\\.claude-flash\\config.toml",
+  "config_path": "C:\\Users\\you\\.agent-flash\\config.toml",
   "config_error": null,
-  "journal_path": "C:\\Users\\you\\.claude-flash\\journal",
-  "last_event": { "event": "PermissionRequest", "project": "claude-flash", "ts": "2026-09-11T11:14:03.120Z" },
+  "journal_path": "C:\\Users\\you\\.agent-flash\\journal",
+  "last_event": { "event": "PermissionRequest", "project": "agent-flash", "ts": "2026-09-11T11:14:03.120Z" },
   "opted_out": 0
 }
 ```
@@ -189,7 +189,7 @@ curl -s "http://127.0.0.1:47823/v1/events?since=41&wait=25" -H "Authorization: B
       "event": "PermissionRequest",
       "kind": "approval",
       "session": "3aee9676",
-      "project": "claude-flash",
+      "project": "agent-flash",
       "tool": "Bash",
       "delivered": ["flash"]
     },
@@ -199,7 +199,7 @@ curl -s "http://127.0.0.1:47823/v1/events?since=41&wait=25" -H "Authorization: B
       "event": "PostToolUse",
       "kind": "approval",
       "session": "3aee9676",
-      "project": "claude-flash",
+      "project": "agent-flash",
       "tool": "Bash",
       "waited_ms": 80213
     }

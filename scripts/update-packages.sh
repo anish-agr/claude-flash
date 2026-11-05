@@ -7,13 +7,13 @@ set -euo pipefail
 
 version="${1:?usage: scripts/update-packages.sh VERSION}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
-sums="$(curl -fsSL "https://github.com/anish-agr/claude-flash/releases/download/v$version/SHA256SUMS")"
+sums="$(curl -fsSL "https://github.com/anish-agr/agent-flash/releases/download/v$version/SHA256SUMS")"
 
 hash_of() {
   printf '%s\n' "$sums" | awk -v file="$1" '$2 == file { print $1 }'
 }
-windows="$(hash_of claude-flash-windows-x64.zip)"
-macos="$(hash_of claude-flash-macos-universal.tar.gz)"
+windows="$(hash_of agent-flash-windows-x64.zip)"
+macos="$(hash_of agent-flash-macos-universal.tar.gz)"
 if [ -z "$windows" ] || [ -z "$macos" ]; then
   echo "SHA256SUMS for v$version does not list both archives" >&2
   exit 1
@@ -24,12 +24,12 @@ sed -i.bak -E \
   -e "s/\"version\": \"[0-9][^\"]*\"/\"version\": \"$version\"/" \
   -e "s#/download/v[0-9][^/]*/#/download/v$version/#" \
   -e "s/\"hash\": \"[0-9a-f]{64}\"/\"hash\": \"$windows\"/" \
-  "$root/packaging/scoop/claude-flash.json"
+  "$root/packaging/scoop/agent-flash.json"
 sed -i.bak -E \
   -e "s#/download/v[0-9][^/]*/#/download/v$version/#" \
   -e "s/sha256 \"[0-9a-f]{64}\"/sha256 \"$macos\"/" \
-  "$root/packaging/homebrew/claude-flash.rb"
-rm -f "$root/packaging/scoop/claude-flash.json.bak" "$root/packaging/homebrew/claude-flash.rb.bak"
+  "$root/packaging/homebrew/agent-flash.rb"
+rm -f "$root/packaging/scoop/agent-flash.json.bak" "$root/packaging/homebrew/agent-flash.rb.bak"
 
 # WinGet wants the checksum in upper case and carries the version in all three files.
 windows_upper="$(printf '%s' "$windows" | tr 'a-f' 'A-F')"
@@ -46,5 +46,5 @@ for manifest in "$root"/packaging/winget/*.yaml; do
 done
 
 echo "Scoop, Homebrew and WinGet manifests now point at v$version."
-echo "Copy packaging/homebrew/claude-flash.rb to Formula/claude-flash.rb in anish-agr/homebrew-tap."
+echo "Copy packaging/homebrew/agent-flash.rb to Formula/agent-flash.rb in anish-agr/homebrew-tap."
 echo "For WinGet, see packaging/README.md."

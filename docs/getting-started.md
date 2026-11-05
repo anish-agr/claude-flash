@@ -3,7 +3,7 @@
 [README](../README.md) · [How it works](how-it-works.md) ·
 [Configuration](configuration.md) · [Local API](api.md) · [Security](../SECURITY.md)
 
-This guide installs Claude Flash, checks each part of it on your machine, and
+This guide installs Agent Flash, checks each part of it on your machine, and
 covers reporting a problem and removing it again. It takes about fifteen minutes
 on Windows or macOS. Where the two differ, each gets its own command.
 
@@ -13,13 +13,13 @@ You need Windows 10 (version 1803 or later) or Windows 11, or macOS 11 or later,
 with Claude Code installed and signed in. The terminal, the desktop app and editor
 extensions all work, because they read the same settings file.
 
-Installing changes these things, and [removing Claude Flash](#removing-claude-flash)
+Installing changes these things, and [removing Agent Flash](#removing-agent-flash)
 undoes them:
 
 | | Windows | macOS |
 |---|---|---|
 | Programs | `%LOCALAPPDATA%\Microsoft\WindowsApps`, or Scoop's folder | `~/.local/bin`, or Homebrew's folder |
-| Settings and journal | `~\.claude-flash` | `~/Library/Application Support/claude-flash` |
+| Settings and journal | `~\.agent-flash` | `~/Library/Application Support/agent-flash` |
 | Start at login | A scheduled task | A LaunchAgent |
 | Claude Code hooks | `~/.claude/settings.json`, with a backup beside it | The same |
 
@@ -33,11 +33,11 @@ With Homebrew on macOS or Scoop on Windows, installing takes two commands. First
 one of these:
 
 ```bash
-brew install anish-agr/tap/claude-flash
+brew install anish-agr/tap/agent-flash
 ```
 
 ```powershell
-scoop install https://raw.githubusercontent.com/anish-agr/claude-flash/main/packaging/scoop/claude-flash.json
+scoop install https://raw.githubusercontent.com/anish-agr/agent-flash/main/packaging/scoop/agent-flash.json
 ```
 
 Then, on either:
@@ -46,7 +46,7 @@ Then, on either:
 flash install
 ```
 
-Its last line says Claude Flash is installed. Continue at
+Its last line says Agent Flash is installed. Continue at
 [Restart Claude Code](#2-restart-claude-code). Without a package manager, follow
 the steps for your platform.
 
@@ -59,21 +59,21 @@ cd $env:TEMP
 ```
 
 ```powershell
-curl.exe -fLO https://github.com/anish-agr/claude-flash/releases/latest/download/claude-flash-windows-x64.zip
+curl.exe -fLO https://github.com/anish-agr/agent-flash/releases/latest/download/agent-flash-windows-x64.zip
 ```
 
 ```powershell
-Expand-Archive claude-flash-windows-x64.zip -DestinationPath claude-flash -Force
+Expand-Archive agent-flash-windows-x64.zip -DestinationPath agent-flash -Force
 ```
 
 ```powershell
-.\claude-flash\flash.exe install
+.\agent-flash\flash.exe install
 ```
 
 Type `curl.exe` in full: in Windows PowerShell, `curl` on its own runs a different
 command.
 
-The installer prints a line for each step, and its last line says Claude Flash is
+The installer prints a line for each step, and its last line says Agent Flash is
 installed. A green sphere appears in the notification area; Windows 11 may put it
 under the arrow that shows hidden icons. The programs go in a folder that is
 already on the `PATH`, so `flash` works straight away:
@@ -91,18 +91,18 @@ cd "$TMPDIR"
 ```
 
 ```bash
-curl -fLO https://github.com/anish-agr/claude-flash/releases/latest/download/claude-flash-macos-universal.tar.gz
+curl -fLO https://github.com/anish-agr/agent-flash/releases/latest/download/agent-flash-macos-universal.tar.gz
 ```
 
 ```bash
-mkdir -p claude-flash && tar -xzf claude-flash-macos-universal.tar.gz -C claude-flash
+mkdir -p agent-flash && tar -xzf agent-flash-macos-universal.tar.gz -C agent-flash
 ```
 
 ```bash
-./claude-flash/flash install
+./agent-flash/flash install
 ```
 
-The installer prints a line for each step, and its last line says Claude Flash is
+The installer prints a line for each step, and its last line says Agent Flash is
 installed. A green sphere appears in the menu bar. On macOS 13 or later a
 Background Items Added notification may name `flash-agent`; that is the login item.
 
@@ -122,9 +122,9 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 ## 2. Restart Claude Code
 
 Claude Code reads hooks when a session starts, so a session that was open during
-the install cannot reach Claude Flash. Quit every session: `/exit` in a terminal,
+the install cannot reach Agent Flash. Quit every session: `/exit` in a terminal,
 quit the desktop app completely, and close the Claude Code panel in your editor.
-Sessions you start from now on send their events to Claude Flash.
+Sessions you start from now on send their events to Agent Flash.
 
 ## 3. Check each part
 
@@ -255,14 +255,14 @@ or run the program by its full path:
 
 **macOS will not open `flash`.** The archive was downloaded in a browser, which
 quarantines it. In the folder you extracted it in, run
-`xattr -dr com.apple.quarantine claude-flash`, then `./claude-flash/flash install`
+`xattr -dr com.apple.quarantine agent-flash`, then `./agent-flash/flash install`
 again.
 
 **Windows will not run `flash.exe`.** A zip downloaded in a browser is marked as
 coming from the internet, and SmartScreen acts on that mark. Run `Unblock-File` on
 the zip and extract it again.
 
-**Smart App Control blocks Claude Flash.** Smart App Control allows programs it
+**Smart App Control blocks Agent Flash.** Smart App Control allows programs it
 recognises and blocks unsigned ones it does not. It judges each executable on its
 own, offers no per-program exception, and can start blocking a program days after it
 first ran. When it does, flashes stop, new Claude Code sessions report a hook error,
@@ -287,10 +287,10 @@ is on for you is shown in **Windows Security → App & browser control → Smart
 Control settings**.
 
 **A terminal says `missing or incorrect API token`, but flashes still work.** You
-installed Claude Flash from inside a packaged app, such as the Claude desktop app,
+installed Agent Flash from inside a packaged app, such as the Claude desktop app,
 which keeps each program's writes under `AppData` in a private copy the app alone
 can see. Your own terminals then read an empty data folder and cannot reach the
-agent. Run `flash install` once; it moves the token and settings to `~\.claude-flash`
+agent. Run `flash install` once; it moves the token and settings to `~\.agent-flash`
 in your user folder, which every program shares, and the token works everywhere.
 
 **Claude Code shows "hook error occurred".** The agent is not running, so Claude
@@ -304,9 +304,9 @@ Code cannot deliver events to it. Start it with `flash agent start`.
 
 ## Reporting a problem
 
-Open an [issue](https://github.com/anish-agr/claude-flash/issues) that says what you
+Open an [issue](https://github.com/anish-agr/agent-flash/issues) that says what you
 did, what you expected and what happened, and paste in the report this command puts
-on the clipboard: the system version, the Claude Code and Claude Flash versions,
+on the clipboard: the system version, the Claude Code and Agent Flash versions,
 `flash doctor`, the last hour of the journal and the end of the agent's log.
 
 On Windows:
@@ -324,7 +324,7 @@ On macOS:
 The journal names project folders and tools, and holds no prompts or code. Report a
 security problem privately instead, as [SECURITY.md](../SECURITY.md) describes.
 
-## Removing Claude Flash
+## Removing Agent Flash
 
 ```bash
 flash uninstall --purge
@@ -332,7 +332,7 @@ flash uninstall --purge
 
 This stops the agent and removes the hooks, the login item, the settings and the
 journal. The programs stay. If Homebrew or Scoop installed them, remove them with
-`brew uninstall claude-flash` or `scoop uninstall claude-flash`. Otherwise delete
+`brew uninstall agent-flash` or `scoop uninstall agent-flash`. Otherwise delete
 them.
 
 On Windows:
@@ -349,5 +349,5 @@ rm ~/.local/bin/flash ~/.local/bin/flash-agent
 
 Restart Claude Code once more. A session that is still open keeps the hooks it
 loaded, and shows "hook error occurred" until it restarts. One file stays behind on
-purpose: `~/.claude/settings.json.claude-flash-backup`, your settings as they were
-before Claude Flash last changed them. Delete it when you no longer need it.
+purpose: `~/.claude/settings.json.agent-flash-backup`, your settings as they were
+before Agent Flash last changed them. Delete it when you no longer need it.

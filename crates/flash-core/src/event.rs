@@ -64,7 +64,7 @@ impl<'de> Deserialize<'de> for Attention {
     }
 }
 
-/// The handful of hook fields Claude Flash uses. Prompts, tool inputs and assistant
+/// The handful of hook fields Agent Flash uses. Prompts, tool inputs and assistant
 /// messages are never read, so they cannot end up in a log.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HookEvent {
@@ -273,7 +273,7 @@ mod tests {
         let e = ev(json!({
             "hook_event_name": "PermissionRequest",
             "session_id": "3aee9676-df62-4e22-9928-fdeee50375dd",
-            "cwd": "/Users/a/claude-flash",
+            "cwd": "/Users/a/agent-flash",
             "permission_mode": "default",
             "tool_name": "Bash",
             "tool_input": {"command": "rm -rf build"},

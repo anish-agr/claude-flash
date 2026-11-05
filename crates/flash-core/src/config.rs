@@ -462,7 +462,7 @@ impl Config {
 
 /// The file written on first run. It documents every setting and must parse to
 /// exactly [`Config::default`].
-pub const DEFAULT_TOML: &str = r##"# Claude Flash configuration.
+pub const DEFAULT_TOML: &str = r##"# Agent Flash configuration.
 #
 # Changes apply to the next signal; nothing needs restarting. Check this file with
 # `flash config check`, or change one value with `flash config set KEY VALUE`.

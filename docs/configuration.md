@@ -3,15 +3,15 @@
 [README](../README.md) · [Getting started](getting-started.md) ·
 [How it works](how-it-works.md) · [Local API](api.md) · [Security](../SECURITY.md)
 
-Claude Flash reads `config.toml` from:
+Agent Flash reads `config.toml` from:
 
 | Platform | Location |
 |---|---|
-| Windows | `%USERPROFILE%\.claude-flash\config.toml` |
-| macOS | `~/Library/Application Support/claude-flash/config.toml` |
-| Linux | `$XDG_CONFIG_HOME/claude-flash/config.toml`, by default `~/.config/claude-flash/config.toml` |
+| Windows | `%USERPROFILE%\.agent-flash\config.toml` |
+| macOS | `~/Library/Application Support/agent-flash/config.toml` |
+| Linux | `$XDG_CONFIG_HOME/agent-flash/config.toml`, by default `~/.config/agent-flash/config.toml` |
 
-With `CLAUDE_FLASH_HOME` set, this file and everything else Claude Flash keeps live
+With `AGENT_FLASH_HOME` set, this file and everything else Agent Flash keeps live
 in that directory instead.
 
 The agent writes the file, with every setting and a comment on each, the first time
@@ -154,7 +154,7 @@ Signals arriving after ten seconds of no input will then hold. Put it back with
 | `kinds` | `["question", "approval", "error"]` | Which signals to push |
 
 With [ntfy](https://ntfy.sh), pick a topic name nobody could guess, subscribe to it
-in the ntfy app, and point Claude Flash at it:
+in the ntfy app, and point Agent Flash at it:
 
 ```toml
 [push]
@@ -212,8 +212,8 @@ Signals raised through the API are matched by their `project` field, or by
 
 | Variable | Effect |
 |---|---|
-| `CLAUDE_FLASH` | In a Claude Code session's environment, `off`, `0`, `false` or `no` leaves that session out |
-| `CLAUDE_FLASH_HOME` | Keep the settings, state, token, journal and log in this directory |
+| `AGENT_FLASH` | In a Claude Code session's environment, `off`, `0`, `false` or `no` leaves that session out |
+| `AGENT_FLASH_HOME` | Keep the settings, state, token, journal and log in this directory |
 | `CLAUDE_CONFIG_DIR` | Claude Code's configuration directory, where `settings.json` is looked for |
 | `NO_COLOR` | Print CLI output without colour |
 | `VISUAL`, `EDITOR` | The editor `flash config edit` opens |
